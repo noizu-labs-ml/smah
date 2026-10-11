@@ -2,9 +2,109 @@ vsn: "0.0.1"
 instructions:
 model_picker:
   default:
+    - "anthropic.claude-haiku-5-5"
     - "openai.gpt-4o-mini"
     - "openai.gpt-4o"
+  query:
+    - "anthropic.claude-haiku-5-5"
+  pipe:
+    - "anthropic.claude-haiku-5-5"
 providers:
+  anthropic:
+    name: Anthropic
+    description: Anthropic Claude Models
+    enabled: true
+    settings:
+    vsn: "0.0.1"
+    models:
+      - name: "claude-opus-5-5"
+        model: "claude-opus-5-5"
+        description: "Claude Opus 5.5 — flagship model for demanding query/pipe work"
+        enabled: true
+        license: "Anthropic Commercial Terms of Service"
+        model_type: "LLM"
+        context:
+          window: 200000
+          out: 32000
+        strengths:
+          - "Deep reasoning"
+          - "Strong coding"
+          - "Long-context analysis"
+        weaknesses:
+          - "Slower than smaller models"
+          - "Higher cost per token"
+        modalities:
+          text:
+            in: true
+            out: true
+          image:
+            in: true
+            out: false
+        attributes:
+          speed: 4
+          reasoning: 9
+          planning: 9
+          creativity: 8
+          conciseness: 8
+          coding: 9
+        use_cases:
+          - name: "Code Generation"
+            score: 0.9
+          - name: "Text Generation"
+            score: 0.9
+          - name: "Translation"
+            score: 0.7
+          - name: "Planning"
+            score: 0.9
+          - name: "Reasoning"
+            score: 0.9
+          - name: "Creativity"
+            score: 0.8
+          - name: "Data Analysis"
+            score: 0.9
+      - name: "claude-haiku-5-5"
+        model: "claude-haiku-5-5"
+        description: "Claude Haiku 5.5 — fast, inexpensive model for planning and picking"
+        enabled: true
+        license: "Anthropic Commercial Terms of Service"
+        model_type: "LLM"
+        context:
+          window: 200000
+          out: 8192
+        strengths:
+          - "Fast"
+          - "Inexpensive"
+        weaknesses:
+          - "Less capable reasoning than larger models"
+        modalities:
+          text:
+            in: true
+            out: true
+          image:
+            in: true
+            out: false
+        attributes:
+          speed: 9
+          reasoning: 6
+          planning: 6
+          creativity: 5
+          conciseness: 6
+          coding: 6
+        use_cases:
+          - name: "Code Generation"
+            score: 0.5
+          - name: "Text Generation"
+            score: 0.5
+          - name: "Translation"
+            score: 0.5
+          - name: "Planning"
+            score: 0.5
+          - name: "Reasoning"
+            score: 0.5
+          - name: "Creativity"
+            score: 0.5
+          - name: "Data Analysis"
+            score: 0.4
   openai:
     name: OpenAI
     description: OpenAI Models

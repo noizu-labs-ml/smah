@@ -5,14 +5,11 @@ from .system import System, system_terminal_configurator
 from smah.console import std_console, err_console
 from rich.markdown import Markdown
 
-def configurator(settings: Settings, gui=False) -> Settings:
+def configurator(settings: Settings) -> Settings:
     """
     Interactive Setup
     """
-    if gui:
-        return terminal_configurator(settings)
-    else:
-        return terminal_configurator(settings)
+    return terminal_configurator(settings)
 
 def terminal_configurator(settings: Settings) -> Settings:
     std_console.print(Markdown("# Configure"))

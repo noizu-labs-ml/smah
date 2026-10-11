@@ -1,23 +1,30 @@
 import json
 import logging
-import subprocess
+import sys
 import textwrap
 
 import rich.box
 from typing import Optional, Tuple
 
 import yaml
-from openai import OpenAI, NotGiven, NOT_GIVEN
-from openai.types.chat import ChatCompletion
 from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.prompt import Prompt, Confirm
+from rich.prompt import Prompt
 
 from smah.console import std_console, err_console
+from smah.exit_codes import ExitCode, fatal
+from smah.providers import UNSET, Unset, Completion, Provider, get_provider, maybe_get_provider
 from smah.runner.response_parser import ResponseParser
 from smah.settings.inference.provider.model import Model
 from smah.runner.prompts import Prompts
 from smah.database import Database
+
+# Optional clipboard support: pyperclip is NOT a required dependency. When it is
+# unavailable (or fails at runtime) SMAH silently degrades to print-only output.
+try:
+    import pyperclip
+except ImportError:
+    pyperclip = None
 
 class Runner:
     MAX_PIPE_LENGTH = 2048
@@ -61,50 +68,19 @@ class Runner:
 
 
     @staticmethod
-    def log_openai_completion_request(
-            model: Model,
-            thread: list,
-            response_format: dict | NotGiven,
-            options: Optional[dict] = None,
-            show: bool = False,
-            level: int = logging.INFO
-    ) -> None:
-        payload = yaml.dump(
-            {
-                'model': model.to_yaml(),
-                'response_format': response_format if response_format != NOT_GIVEN else False,
-                'options': options or False,
-                'thread': thread
-            },
-            sort_keys=False
-        )
-        logging.log(level, f"OpenAI Completion Payload:\n{payload}")
-        if show:
-            err_console.print(Panel(
-                Markdown("```yaml\n" + payload + "\n```\n"),
-                title="OpenAI Completion Payload",
-                style="bold white",
-                box=rich.box.ROUNDED)
+    def planner_response(response: Completion) -> Tuple[bool, dict] | None:
+        try:
+            plan = json.loads(ResponseParser.extract_json(response.text))
+        except json.JSONDecodeError:
+            # Providers without native JSON mode can answer in prose despite
+            # the JSON-only instruction; that is a model-output failure, not a
+            # crash: readable message + exit 5, never a traceback.
+            fatal(
+                "The planner model did not return the required JSON plan (its output was not valid "
+                "JSON). Re-run the command, or pin a different planner model with "
+                "--model / --model-query / --model-pipe.",
+                ExitCode.PROVIDER
             )
-
-    @staticmethod
-    def log_openai_completion_response(response: ChatCompletion, level = logging.INFO, show: bool = False) -> None:
-        payload = yaml.dump(
-            response,
-            sort_keys=False
-        )
-        logging.log(level, f"OpenAI Completion Response:\n{payload}")
-        if show:
-            err_console.print(Panel(
-                Markdown("```yaml\n" + payload + "\n```\n"),
-                title="OpenAI Completion Response",
-                style="bold white",
-                box=rich.box.ROUNDED)
-            )
-
-    @staticmethod
-    def planner_response(response: ChatCompletion) -> Tuple[bool, dict] | None:
-        plan = json.loads(response.choices[0].message.content)
         required_keys = ["title", "model", "reason", "include_settings", "include_settings_reason", "format_output",
                          "format_output_reason", "instructions"]
         if all(key in plan for key in required_keys):
@@ -121,13 +97,6 @@ class Runner:
 
 
 
-
-    def openai_client(self):
-        api_key = self.settings.inference.providers['openai'].api_key(self.args)
-        client = OpenAI(
-            api_key=api_key
-        )
-        return client
 
     @staticmethod
     def replace_exec_tags(content: str):
@@ -160,11 +129,94 @@ class Runner:
             std_console.print(f"\n\n--- {message['role']} ---")
             std_console.print(message['content'])
 
+    @staticmethod
+    def copy_to_clipboard(text: str) -> bool:
+        """
+        Best-effort clipboard copy.
+
+        Returns False whenever the optional pyperclip dependency is unavailable
+        or the copy fails; callers must treat clipboard as a nice-to-have only.
+
+        Args:
+            text (str): The text to copy.
+
+        Returns:
+            bool: True if the text was copied, False otherwise.
+        """
+        if pyperclip is None:
+            return False
+        try:
+            pyperclip.copy(text)
+            return True
+        except Exception:
+            return False
+
+    @staticmethod
+    def show_suggested_commands(commands: list[dict]) -> None:
+        """
+        Print suggested commands for the user to review and run themselves.
+
+        SMAH never executes commands; this presentation is print-only by design.
+        Each command is rendered in a clearly delimited panel with the model's
+        title/purpose (its explanation of what the command does and its impact),
+        the command itself in a copy-friendly code block, and an explicit notice
+        that SMAH does not run commands.
+
+        Args:
+            commands (list[dict]): Commands extracted from the model response
+                (dicts with title/purpose/command/shell keys).
+        """
+        for command in commands:
+            title = (command.get('title') or 'Suggested command').strip()
+            purpose = (command.get('purpose') or '').strip()
+            shell = (command.get('shell') or 'sh').strip() or 'sh'
+            command_text = (command.get('command') or '').strip()
+
+            body = textwrap.dedent(
+                f"""
+                **SMAH does not run commands.** Review the command below and, only if you choose to,
+                run it yourself in your own terminal.
+
+                **Title:** {title}
+                """
+            ).strip()
+            if purpose:
+                body += "\n\n" + textwrap.dedent(
+                    f"""
+                    **What it does / expected impact (per the model):** {purpose}
+                    """
+                ).strip()
+            copied = Runner.copy_to_clipboard(command_text)
+            body += "\n\n" + textwrap.dedent(
+                f"""
+                ```{shell}
+                {command_text}
+                ```
+
+                Copy the command from the block above{', also copied to your clipboard,' if copied else ''} and run it yourself.
+                """
+            ).strip()
+
+            err_console.print(
+                Panel(
+                    Markdown(body, style="white"),
+                    title="SUGGESTED COMMAND — NOT EXECUTED BY SMAH",
+                    style="bold yellow",
+                    box=rich.box.SQUARE
+                )
+            )
+
 
 
     def resume(self, id: int, title: str, plan: dict, pipe: str, messages: list) -> None:
         model_name = self.args.model or plan['model']
-        model = self.settings.inference.models[model_name]
+        model = self.settings.inference.models.get(model_name)
+        if model is None:
+            fatal(
+                f"The session's model '{model_name}' is not an enabled and configured model. "
+                "Run `smah --configure`, or pass --model to select one that is.",
+                ExitCode.AUTH_OR_MODEL
+            )
         open = textwrap.dedent(
             f"""
             Continue Session #{id} - {title} ({model.provider}.{model.model})
@@ -199,46 +251,12 @@ class Runner:
             response = self.run(model, thread)
 
             # Response
-            message = Prompts.message(role=response.choices[0].message.role, content=response.choices[0].message.content)
+            message = Prompts.message(role=response.role, content=response.text)
             self.print_message(message, format=self.args.rich)
 
             # Extract Commands
-            commands = ResponseParser.extract_commands(response.choices[0].message.content) or []
-            for command in commands:
-                std_console.print(
-                    Panel(
-                        Markdown(
-                            textwrap.dedent(
-                                """
-                                `RUNNING SHELL COMMANDS MAY BE DANGEROUS: BE CAREFUL`
-                                
-                                title: 
-                                {title}
-                                
-                                purpose: 
-                                {purpose}
-    
-                                ```{shell} 
-                                {command} 
-                                ```                       
-                                """
-                            ).format(
-                                title=command['title'],
-                                purpose=command['purpose'],
-                                command=command['command'],
-                                shell=command['shell']
-                            ),
-                            style="white"
-                        ),
-                        title="EXEC COMMAND",
-                        style="bold red",
-                        box=rich.box.ROUNDED
-                    )
-                )
-                c = Confirm.ask("[bold green]execute?[/bold green]")
-                if c:
-                    # This is dangerous
-                    subprocess.run(command['command'], shell=True)
+            commands = ResponseParser.extract_commands(response.text) or []
+            self.show_suggested_commands(commands)
 
             # Update Chat History
             self.db.append_to_chat(id, [query_message, message])
@@ -246,51 +264,38 @@ class Runner:
             # Continue
             query = Prompt.ask("[bold green]Message[/bold green]: (type 'exit' or enter to end session)")
 
-        exit(0)
+        sys.exit(ExitCode.OK)
 
     def run(self,
             model: Model,
             thread: list,
-            response_format: dict | NotGiven = NOT_GIVEN,
-            tools: dict | NotGiven = NOT_GIVEN,
+            response_format: dict | Unset = UNSET,
+            tools: dict | Unset = UNSET,
             options: Optional[dict] = None,
             show: bool = False
-            ):
+            ) -> Completion:
         options = options or {}
-        if model.provider == "openai":
-            self.log_openai_completion_request(
-                model=model,
-                thread=thread,
-                response_format=response_format,
-                options=options,
-                show=show
-                )
-
-            client = self.openai_client()
-            model_settings = model.settings or {}
-
-            max_output_tokens = model.context.get("out", 4096)
-            max_tokens = options.get("max_tokens", model_settings.get("max_tokens", max_output_tokens))
-            max_completion_tokens = options.get("max_completion_tokens", model.settings.get("max_completion_tokens", max_tokens))
-
-            if model_settings.get("max_completion_tokens"):
-                max_tokens = NOT_GIVEN
-            else:
-                max_completion_tokens = NOT_GIVEN
-
-            response = client.chat.completions.create(
-                model=model.model,
-                messages=thread,
-                max_completion_tokens=max_completion_tokens,
-                max_tokens=max_tokens,
-                response_format=response_format,
-                tools=tools
+        if model is None:
+            fatal(
+                "No usable model is configured. Run `smah --configure` and enable a model, or pass "
+                "--model / --model-query / --model-pipe explicitly "
+                "(e.g. --model anthropic.claude-opus-5-5 or --model openai.gpt-4o-mini).",
+                ExitCode.AUTH_OR_MODEL
             )
-            self.log_openai_completion_response(response, show=show)
+        provider = self.provider_for(model)
+        return provider.complete(
+            model=model,
+            thread=thread,
+            response_format=response_format,
+            tools=tools,
+            options=options,
+            show=show
+        )
 
-            return response
-
-
+    def provider_for(self, model: Model) -> Provider:
+        """Resolve the configured provider implementation for a model (exits 3 on unknown keys)."""
+        settings_provider = self.settings.inference.providers.get(model.provider)
+        return get_provider(model.provider, args=self.args, settings_provider=settings_provider)
 
     def inference_model(self, task: str) -> Optional[Model]:
         model = None
@@ -298,21 +303,51 @@ class Runner:
             model = self.settings.inference.models.get(self.args.model_query or self.args.model)
         if task == 'pipe':
             model = self.settings.inference.models.get(self.args.model_pipe or self.args.model)
-        if task == 'interactive':
-            model = self.settings.inference.models.get(self.args.model_interactive or self.args.model)
-        if task == 'edit':
-            model = self.settings.inference.models.get(self.args.model_edit or self.args.model)
-        if task == 'review':
-            model = self.settings.inference.models.get(self.args.model_review or self.args.model)
 
         if model:
             return model
 
-        l = self.settings.inference.model_picker.get(task) or self.settings.inference.model_picker.get('default') or []
-        for key in l:
+        picker = self.settings.inference.model_picker
+        candidates = list(picker.get(task) or [])
+        # A task-specific list (e.g. query: claude-only) may name no provider
+        # the user has credentials for — fall through to the default list so a
+        # user with only an OpenAI (or only an Anthropic) key still gets a
+        # working model.
+        for key in picker.get('default') or []:
+            if key not in candidates:
+                candidates.append(key)
+        first_registered = None
+        for key in candidates:
             if key in self.settings.inference.models:
-                return self.settings.inference.models[key]
-        return None
+                candidate = self.settings.inference.models[key]
+                if first_registered is None:
+                    first_registered = candidate
+                # Probe tolerantly: an unknown/unusable provider key in the
+                # picker list skips that candidate; the hard exit-3 for
+                # unknown providers stays on the provider actually chosen.
+                provider = maybe_get_provider(
+                    candidate.provider,
+                    args=self.args,
+                    settings_provider=self.settings.inference.providers.get(candidate.provider)
+                )
+                if provider is None:
+                    continue
+                try:
+                    usable = provider.has_credentials()
+                except Exception as exc:
+                    # e.g. a malformed settings block whose api_key cannot be
+                    # read — same failure class as construction: skip, but
+                    # leave a debug breadcrumb (visible with -v).
+                    logging.debug(
+                        "Skipping candidate '%s' (provider '%s'): the credential probe failed (%s).",
+                        key,
+                        candidate.provider,
+                        exc
+                    )
+                    continue
+                if usable:
+                    return candidate
+        return first_registered
 
     def query_plan(self, query: str) -> Optional[Tuple[bool, dict]]:
         self.log_mode("Query Plan", show=self.args.verbose >= 1)
@@ -371,7 +406,13 @@ class Runner:
                 
                 {instructions}
                 """).format(request=query, instructions=p["instructions"])
-            model = self.settings.inference.models[p["model"]]
+            model = self.settings.inference.models.get(p["model"])
+            if model is None:
+                fatal(
+                    f"The planner selected '{p['model']}', which is not an enabled and configured model. "
+                    "Run `smah --configure` or pass --model to pin a model (e.g. openai.gpt-4o-mini).",
+                    ExitCode.AUTH_OR_MODEL
+                )
             print(query)
             self.print_message(Prompts.message(content=request), format=self.args.rich, strip_cot=False)
 
@@ -387,46 +428,12 @@ class Runner:
             )
 
 
-            msg = {'role': 'assistant', 'content': response.choices[0].message.content}
+            msg = {'role': response.role, 'content': response.text}
             self.print_message(msg, format=self.args.rich)
 
             # Extract Commands
-            commands = ResponseParser.extract_commands(response.choices[0].message.content) or []
-            for command in commands:
-                std_console.print(
-                    Panel(
-                        Markdown(
-                            textwrap.dedent(
-                                """
-                                `RUNNING SHELL COMMANDS MAY BE DANGEROUS: BE CAREFUL`
-                                
-                                title: 
-                                {title}
-
-                                purpose: 
-                                {purpose}
-
-                                ```{shell} 
-                                {command} 
-                                ```                       
-                                """
-                            ).format(
-                                title=command['title'],
-                                purpose=command['purpose'],
-                                command=command['command'],
-                                shell=command['shell']
-                            ),
-                            style="white"
-                        ),
-                        title="EXEC COMMAND",
-                        style="bold red",
-                        box=rich.box.ROUNDED
-                    )
-                )
-                c = Confirm.ask("[bold green]execute?[/bold green]")
-                if c:
-                    # This is dangerous
-                    subprocess.run(command['command'], shell=True)
+            commands = ResponseParser.extract_commands(response.text) or []
+            self.show_suggested_commands(commands)
 
 
 
@@ -436,13 +443,13 @@ class Runner:
                 p,
                 [
                     Prompts.message(content=request),
-                    {'role': 'assistant', 'content': response.choices[0].message.content}
+                    {'role': response.role, 'content': response.text}
                 ]
             )
 
 
 
-            return response.choices[0].message.content
+            return response.text
         return None
 
 
@@ -468,7 +475,13 @@ class Runner:
                 instructions=p["instructions"]
             )
 
-            model = self.settings.inference.models[p["model"]]
+            model = self.settings.inference.models.get(p["model"])
+            if model is None:
+                fatal(
+                    f"The planner selected '{p['model']}', which is not an enabled and configured model. "
+                    "Run `smah --configure` or pass --model to pin a model (e.g. openai.gpt-4o-mini).",
+                    ExitCode.AUTH_OR_MODEL
+                )
             response = self.run(
                 model=model,
                 thread=[
@@ -481,7 +494,7 @@ class Runner:
                     Prompts.message(content=request),
                 ]
             )
-            response_body = response.choices[0].message.content
+            response_body = response.text
             if p["format_output"] and self.args.rich:
                 std_console.print(Markdown(response_body))
             else:
@@ -501,13 +514,9 @@ class Runner:
                 p,
                 [
                     Prompts.message(content=request),
-                    {'role': 'assistant', 'content': response.choices[0].message.content}
+                    {'role': response.role, 'content': response.text}
                 ],
                 pipe=pipe
             )
-            return response.choices[0].message.content
+            return response.text
         return None
-
-
-    def interactive(self, query: Optional[str] = None, pipe: Optional[str] = None) -> None:
-        self.log_mode("Interactive", show=self.args.verbose >= 1)
