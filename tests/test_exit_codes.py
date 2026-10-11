@@ -71,41 +71,57 @@ def test_run_without_model_exits_auth_or_model():
         assert e.code == int(ExitCode.AUTH_OR_MODEL)
 
 
-def test_run_rejects_unsupported_provider():
+def test_run_rejects_unknown_provider_key_as_config_error():
+    from types import SimpleNamespace
+
     from smah.settings.inference.provider.model import Model
-
-    runner = _bare_runner()
-    model = Model("anthropic", {"name": "claude-opus-5-5", "model": "claude-opus-5-5", "enabled": True})
-    try:
-        runner.run(model, [])
-        assert False, "expected SystemExit"
-    except SystemExit as e:
-        assert e.code == int(ExitCode.AUTH_OR_MODEL)
-
-
-def test_openai_client_without_api_key_exits_auth_or_model():
-    from types import SimpleNamespace
-
-    runner = _bare_runner()
-    runner.args = SimpleNamespace(openai_api_key=None)
-    provider = mock.MagicMock()
-    provider.api_key.return_value = None
-    runner.settings = SimpleNamespace(inference=SimpleNamespace(providers={"openai": provider}))
-    try:
-        runner.openai_client()
-        assert False, "expected SystemExit"
-    except SystemExit as e:
-        assert e.code == int(ExitCode.AUTH_OR_MODEL)
-
-
-def test_openai_client_without_openai_provider_exits_auth_or_model():
-    from types import SimpleNamespace
 
     runner = _bare_runner()
     runner.args = SimpleNamespace(openai_api_key=None)
     runner.settings = SimpleNamespace(inference=SimpleNamespace(providers={}))
+    model = Model("mistral", {"name": "big-model", "model": "mistral-big", "enabled": True})
     try:
-        runner.openai_client()
+        runner.run(model, [])
+        assert False, "expected SystemExit"
+    except SystemExit as e:
+        assert e.code == int(ExitCode.CONFIG)
+
+
+def test_openai_provider_without_api_key_exits_auth_or_model_before_any_client(monkeypatch):
+    from types import SimpleNamespace
+
+    from smah.providers import get_provider
+    from smah.settings.inference.provider.model import Model
+
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("SMAH_OPENAI_API_KEY", raising=False)
+    provider_block = mock.MagicMock()
+    provider_block.api_key.return_value = None
+    provider = get_provider(
+        "openai",
+        args=SimpleNamespace(openai_api_key=None),
+        settings_provider=provider_block,
+    )
+    model = Model("openai", {"name": "gpt-4o-mini", "model": "gpt-4o-mini", "enabled": True})
+    with mock.patch("openai.OpenAI") as client_factory:
+        try:
+            provider.complete(model, [{"role": "user", "content": "hi"}])
+            assert False, "expected SystemExit"
+        except SystemExit as e:
+            assert e.code == int(ExitCode.AUTH_OR_MODEL)
+        client_factory.assert_not_called()
+
+
+def test_openai_provider_without_openai_provider_block_exits_auth_or_model(monkeypatch):
+    from types import SimpleNamespace
+
+    from smah.providers import get_provider
+
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("SMAH_OPENAI_API_KEY", raising=False)
+    provider = get_provider("openai", args=SimpleNamespace(openai_api_key=None), settings_provider=None)
+    try:
+        provider.require_api_key()
         assert False, "expected SystemExit"
     except SystemExit as e:
         assert e.code == int(ExitCode.AUTH_OR_MODEL)

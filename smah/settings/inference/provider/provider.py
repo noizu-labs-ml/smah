@@ -42,7 +42,10 @@ class Provider:
 
     def api_key(self, args):
         if self.identifier == "openai":
-            k = args.openai_api_key or self.settings.get("api_key")
+            # args may be None (provider constructed without a CLI namespace);
+            # the settings block is still consulted in that case.
+            flag = getattr(args, "openai_api_key", None) if args is not None else None
+            k = flag or self.settings.get("api_key")
         else:
             k = self.settings.get("api_key")
         if k:
