@@ -21,10 +21,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, NoReturn, Optional
 
 import anthropic
-from openai import NOT_GIVEN, NotGiven
 
 from smah.exit_codes import ExitCode, fatal
-from smah.providers.base import Completion, Provider, log_payload
+from smah.providers.base import UNSET, Unset, Completion, Provider, log_payload
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from smah.settings.inference.provider.model import Model
@@ -71,8 +70,8 @@ class AnthropicProvider(Provider):
             model: "Model",
             thread: list,
             system: Optional[str] = None,
-            response_format: dict | NotGiven = NOT_GIVEN,
-            tools: dict | NotGiven = NOT_GIVEN,  # noqa: ARG002 - tool calling not wired up yet
+            response_format: dict | Unset = UNSET,
+            tools: dict | Unset = UNSET,  # noqa: ARG002 - tool calling not wired up yet
             options: Optional[dict] = None,
             show: bool = False
     ) -> Completion:
@@ -88,7 +87,7 @@ class AnthropicProvider(Provider):
         ]
 
         system_prompt = system
-        if response_format is not NOT_GIVEN and response_format is not None:
+        if response_format is not UNSET and response_format is not None:
             # Anthropic has no response_format parameter; ask for JSON in the
             # system prompt and parse defensively on the way out.
             system_prompt = (
@@ -110,7 +109,7 @@ class AnthropicProvider(Provider):
             {
                 'model': model.to_yaml(),
                 'system': system_prompt or False,
-                'response_format': response_format if response_format != NOT_GIVEN else False,
+                'response_format': response_format if response_format is not UNSET else False,
                 'options': options or False,
                 'thread': messages
             },

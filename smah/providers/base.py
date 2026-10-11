@@ -25,7 +25,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, Optional
 
 import rich.box
 import yaml
-from openai import NOT_GIVEN, NotGiven
 from rich.markdown import Markdown
 from rich.panel import Panel
 
@@ -35,6 +34,24 @@ from smah.exit_codes import ExitCode, fatal
 if TYPE_CHECKING:  # pragma: no cover - typing only, avoids a runtime cycle
     from smah.settings.inference.provider.model import Model
     from smah.settings.inference.provider.provider import Provider as ProviderSettings
+
+
+class _Unset:
+    """
+    Sentinel for "parameter not set" — vendor-neutral on purpose. The provider
+    abstraction must not borrow one vendor SDK's sentinel (the runner still
+    accepts openai's NOT_GIVEN for signature compatibility, but it is
+    translated to UNSET before reaching providers; each vendor provider
+    translates UNSET to its own SDK's sentinel internally).
+    """
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "UNSET"
+
+
+Unset = _Unset
+UNSET: Unset = _Unset()
 
 
 @dataclass
@@ -99,7 +116,7 @@ class Provider(ABC):
         Returns:
             The resolved key, or None when no credential is available.
         """
-        if self.settings_provider is not None and self.args is not None:
+        if self.settings_provider is not None:
             key = self.settings_provider.api_key(self.args)
             if key:
                 return key
@@ -133,8 +150,8 @@ class Provider(ABC):
             model: "Model",
             thread: list,
             system: Optional[str] = None,
-            response_format: dict | NotGiven = NOT_GIVEN,
-            tools: dict | NotGiven = NOT_GIVEN,
+            response_format: dict | Unset = UNSET,
+            tools: dict | Unset = UNSET,
             options: Optional[dict] = None,
             show: bool = False
     ) -> Completion:

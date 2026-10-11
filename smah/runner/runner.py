@@ -7,14 +7,13 @@ import rich.box
 from typing import Optional, Tuple
 
 import yaml
-from openai import NotGiven, NOT_GIVEN
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
 
 from smah.console import std_console, err_console
 from smah.exit_codes import ExitCode, fatal
-from smah.providers import Completion, Provider, get_provider, maybe_get_provider
+from smah.providers import UNSET, Unset, Completion, Provider, get_provider, maybe_get_provider
 from smah.runner.response_parser import ResponseParser
 from smah.settings.inference.provider.model import Model
 from smah.runner.prompts import Prompts
@@ -270,8 +269,8 @@ class Runner:
     def run(self,
             model: Model,
             thread: list,
-            response_format: dict | NotGiven = NOT_GIVEN,
-            tools: dict | NotGiven = NOT_GIVEN,
+            response_format: dict | Unset = UNSET,
+            tools: dict | Unset = UNSET,
             options: Optional[dict] = None,
             show: bool = False
             ) -> Completion:

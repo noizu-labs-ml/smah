@@ -124,6 +124,47 @@ def test_credentials_are_never_included_in_messages(monkeypatch):
     assert "sk-ant-secret-value" not in provider.credential_help()
 
 
+def test_settings_key_resolves_without_args(monkeypatch):
+    # A provider constructed without a CLI namespace must still consult the
+    # configured settings block — not silently fall through to env-only.
+    from smah.settings.inference.provider.provider import Provider as ProviderSettings
+
+    clean_env(monkeypatch)
+
+    anthropic_block = ProviderSettings("anthropic", {
+        "name": "Anthropic", "enabled": True, "settings": {"api_key": "cfg-ant-key"},
+    })
+    provider = get_provider("anthropic", args=None, settings_provider=anthropic_block)
+    assert provider.has_credentials() is True
+    assert provider.resolve_api_key() == "cfg-ant-key"
+
+    openai_block = ProviderSettings("openai", {
+        "name": "OpenAI", "enabled": True, "settings": {"api_key": "cfg-openai-key"},
+    })
+    provider = get_provider("openai", args=None, settings_provider=openai_block)
+    assert provider.has_credentials() is True
+    assert provider.resolve_api_key() == "cfg-openai-key"
+
+
+def test_only_openai_provider_imports_the_openai_sdk():
+    # The provider-neutral layer must not depend on any vendor SDK: only
+    # openai_provider.py may import from openai.
+    import pathlib
+
+    import smah
+
+    providers_dir = pathlib.Path(smah.__file__).parent / "providers"
+    offenders = []
+    for py in sorted(providers_dir.glob("*.py")):
+        if py.name == "openai_provider.py":
+            continue
+        text = py.read_text(encoding="utf-8")
+        for marker in ("from openai", "import openai"):
+            if marker in text:
+                offenders.append(f"{py.name}: {marker}")
+    assert offenders == [], f"vendor SDK leaked into neutral layer: {offenders}"
+
+
 # ----------------------------------------------------------------------
 # Anthropic request shape
 # ----------------------------------------------------------------------

@@ -12,10 +12,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, NoReturn, Optional
 
 import openai
-from openai import NOT_GIVEN, NotGiven, OpenAIError
+from openai import NOT_GIVEN, OpenAIError
 
 from smah.exit_codes import ExitCode, fatal
-from smah.providers.base import Completion, Provider, log_payload
+from smah.providers.base import UNSET, Unset, Completion, Provider, log_payload
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from smah.settings.inference.provider.model import Model
@@ -48,8 +48,8 @@ class OpenAIProvider(Provider):
             model: "Model",
             thread: list,
             system: Optional[str] = None,
-            response_format: dict | NotGiven = NOT_GIVEN,
-            tools: dict | NotGiven = NOT_GIVEN,
+            response_format: dict | Unset = UNSET,
+            tools: dict | Unset = UNSET,
             options: Optional[dict] = None,
             show: bool = False
     ) -> Completion:
@@ -64,7 +64,7 @@ class OpenAIProvider(Provider):
             "OpenAI Completion Payload",
             {
                 'model': model.to_yaml(),
-                'response_format': response_format if response_format != NOT_GIVEN else False,
+                'response_format': response_format if response_format is not UNSET else False,
                 'options': options or False,
                 'thread': messages
             },
@@ -85,14 +85,19 @@ class OpenAIProvider(Provider):
         else:
             max_completion_tokens = NOT_GIVEN
 
+        # UNSET (vendor-neutral) becomes the OpenAI SDK's own NOT_GIVEN here;
+        # only this provider may touch the OpenAI sentinel.
+        sdk_response_format = response_format if response_format is not UNSET else NOT_GIVEN
+        sdk_tools = tools if tools is not UNSET else NOT_GIVEN
+
         try:
             response = client.chat.completions.create(
                 model=model.model,
                 messages=messages,
                 max_completion_tokens=max_completion_tokens,
                 max_tokens=max_tokens,
-                response_format=response_format,
-                tools=tools
+                response_format=sdk_response_format,
+                tools=sdk_tools
             )
         except OpenAIError as exc:
             self.translate_error(exc)

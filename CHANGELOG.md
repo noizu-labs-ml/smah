@@ -44,6 +44,15 @@ Safety and reliability wave:
 - Anthropic `max_tokens` honors the model's configured output budget
   (catalog `context.out`, or a model-settings override) and falls back to
   16000 only when the entry carries no budget.
+- Credential resolution decoupled from the CLI namespace: a provider
+  constructed without `args` still consults its configured settings block
+  (a key in the config file with nothing in the environment no longer
+  produces a spurious exit-4 depending on construction path).
+- The provider abstraction no longer borrows OpenAI's `NOT_GIVEN`/`NotGiven`
+  sentinel: a vendor-neutral `UNSET` sentinel in `smah/providers/base.py`
+  expresses "parameter not set" across the contract and the Anthropic
+  provider; only `openai_provider.py` touches the OpenAI SDK's sentinel,
+  translating `UNSET` to `NOT_GIVEN` when it builds its request.
 - Provider abstraction (`smah/providers/`): the runner now resolves providers
   by config key through a registry (`openai`, `anthropic`) behind a shared
   contract (credential resolution without ever printing keys, normalized
