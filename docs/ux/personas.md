@@ -60,7 +60,7 @@ Two product decisions shape every persona: SMAH is print-only (it never executes
 **What would make him abandon it:**
 - Print-only friction: if getting a command into his shell takes more than one keystroke (select-with-mouse copy is already his habit from browser chat, so SMAH must beat it, not match it).
 - Silent no-op exits — he will assume the tool hung and kill it (`smah/smah.py:175-176`).
-- Setup that does not end with a working tool (today a fresh install enables no usable model and the first query dies, inventory §4).
+- Setup that does not end with a working tool (today a keyless install registers models anyway — registration never checks for an API key — then the provider call fails and `smah/smah.py:175-176` swallows it, so his first commands look like silent no-ops).
 
 **Risk tolerance for AI-generated shell:** High in theory, moderate after the scar. He *wants* execution and will grumble that print-only is nanny-state — this document does not pretend otherwise. He accepts it only if clipboard/shell handoff is instant and reliable. He is the persona print-only is a *cost* for; see the tension section below.
 

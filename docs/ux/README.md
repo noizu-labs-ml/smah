@@ -6,7 +6,7 @@ Internal engineering doc set for SMAH ("SMart As Hell SysteM Admin Helper"), a P
 
 1. SMAH is a dormant early prototype — v0.1.13, last commit 2025-01-20, self-described as such; the working core is one-shot queries (`-q`), instruction files (`-i`), piped-stdin processing, sqlite session persistence (`--continue`/`--session`/`--history`), and rich output.
 2. It currently **executes** model-generated shell via `subprocess.run(cmd, shell=True)` after a single y/n confirm (`smah/runner/runner.py:241`, `:429` — the source comments `# This is dangerous`); binding decision: the executor is being removed in favor of print-only handoff.
-3. It is OpenAI-only with a model catalog frozen at late-2024 ids (`inference_defaults.yaml`) and nothing usable enabled out of the box, so a fresh install's first query crashes; binding decision: pluggable providers with Anthropic/Claude default (`claude-opus-5-5`, `claude-haiku-5-5`).
+3. It is OpenAI-only with a model catalog frozen at late-2024 ids (`inference_defaults.yaml` — `gpt-4o`/`gpt-4o-mini` enabled, `gpt-4-turbo`/`o1-preview`/`o1-mini` disabled); a keyless install registers models anyway (registration never checks for a key), the provider call fails, and `main()` swallows it — so a new user's first commands appear to do nothing and exit 0; binding decision: pluggable providers with Anthropic/Claude default (`claude-opus-5-5`, `claude-haiku-5-5`).
 4. `main()` swallows all exceptions (`smah/smah.py:175-176`), so most failures look like silent no-ops; seven advertised flags plus `smah-admin` and the README's `--setup` are vaporware.
 5. This doc set plans the recovery: safety and honesty first, then usable-out-of-the-box, the subcommand surface, provider abstraction, and only then new capability.
 

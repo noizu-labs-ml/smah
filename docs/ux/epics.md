@@ -84,24 +84,26 @@ A note on regression guard: stories marked `[works today]` (US-07, US-08, US-18,
 
 ## E4 — Onboarding & First Run
 
-**Goal:** A fresh install reaches a working first answer with no hand-edited files, and setup states what it configures and where data goes.
+**Goal:** A fresh install reaches a working first answer with no hand-edited files — or, when it cannot (no key), fails loudly with exit 4 — and setup states what it configures and where data goes.
 
-**Problem:** The shipped catalog is frozen at late-2024 OpenAI ids (`gpt-4-turbo`, `gpt-4o`, `gpt-4o-mini`, `o1-preview`, `o1-mini` in `smah/settings/inference/inference_defaults.yaml`, with a hardcoded picker fallback `openai.gpt-4o-mini` at `smah/settings/inference/inference.py:29`); per the inventory (§4) nothing usable is enabled on a fresh install, and the wizard never asks which models to enable (`smah/settings/inference/configurator.py:22-32` asks only key + provider enable). The first real query dies at the planner's model lookup (`runner.py:374`) — invisibly, because of E3's swallow. Separately, the OS auto-detect prompt treats any input as yes (`smah/settings/system/operating_system/configurator.py:56`; manual path unreachable), and the wizard never states where data lives.
+**Problem:** The shipped catalog is frozen at late-2024 OpenAI ids (`gpt-4-turbo`, `gpt-4o`, `gpt-4o-mini`, `o1-preview`, `o1-mini` in `smah/settings/inference/inference_defaults.yaml`, with a hardcoded picker fallback `openai.gpt-4o-mini` at `smah/settings/inference/inference.py:29`) — `gpt-4o` and `gpt-4o-mini` ship enabled (`:74`, `:134`), the rest disabled, and `o1-preview` is decommissioned outright. The first-run defect is *not* the enabled flags: a keyless install still registers models, because registration gates on `enabled` + `is_configured()` and neither `Provider.is_configured()` (`provider.py:33-41`) nor `Model.is_configured()` (`model.py:76-83`) checks for an API key (`inference.py:37-42`). The provider call then fails at runtime and `main()`'s blanket except swallows it (`smah/smah.py:175-176`) — net effect: the new user's first commands appear to do nothing and exit 0. The fix is a preflight check, an exit-4 path naming what to configure, and error surfacing — not flipping enabled flags. The wizard also never asks which models to enable (`smah/settings/inference/configurator.py:22-32` asks only key + provider enable), the OS auto-detect prompt treats any input as yes (`smah/settings/system/operating_system/configurator.py:56`; manual path unreachable), and the wizard never states where data lives.
 
 **Scope:**
-- In: regenerate defaults with current, enabled-by-default model entries (interim OpenAI set until E6 lands Claude defaults; model ids in config per decision 2); wizard gains a model-enable/default step; wizard states config/db/log paths and what is sent to the provider; fix the y/n auto-load bug; bounded wizard with skippable optional questions; setup ends by printing the first command to try.
-- Out: multi-provider selection UI (E6); key validation calls during the wizard (doctor's job); migrating existing configs beyond what already exists.
+- In: preflight key/config check before any provider call (exit 4 with the missing-key message; local check only — provider reachability stays in `doctor`); catalog staleness refresh — drop decommissioned ids, keep entries current (the defect is staleness, not the enabled flags; model ids in config per decision 2, interim OpenAI set until E6 lands Claude defaults); wizard gains a model-enable/default step; wizard states config/db/log paths and what is sent to the provider; fix the y/n auto-load bug; bounded wizard with skippable optional questions; setup ends by printing the first command to try.
+- Out: flipping enabled flags as a "fix" (the shipped flags already enable `gpt-4o`/`gpt-4o-mini`); multi-provider selection UI (E6); key validation calls during the wizard (doctor's job); migrating existing configs beyond what already exists.
 
 **Stories:** US-01, US-02, US-03, US-04, US-06.
 
 **Acceptance criteria:**
 - [ ] Fresh install → wizard → first `smah ask` succeeds, no file editing (verified in CI with a fake provider).
+- [ ] Keyless install: `smah ask` exits 4 with the missing-key message before any provider call (CI: fake provider records zero calls).
 - [ ] Wizard refuses to finish with zero enabled models.
 - [ ] OS auto-detect question accepts explicit y/n; manual path reachable.
 - [ ] Setup footer prints the three local paths + the egress statement.
-- [ ] Config schema accepts the new defaults without version-gate rejection (`settings.py:27-39`).
+- [ ] Catalog contains no ids the active provider no longer recognizes (staleness is the criterion, not flag states).
+- [ ] Config schema accepts the refreshed catalog without version-gate rejection (`settings.py:27-39`).
 
-**Risks:** Interim OpenAI defaults become dead weight the moment E6 lands — keep the enabled set small (one default) to avoid double migration. Existing users' configs must not be silently rewritten; the wizard's confirm step covers it.
+**Risks:** Interim OpenAI catalog refresh becomes dead weight the moment E6 lands — keep it minimal (drop decommissioned ids) to avoid double migration. Preflight must stay local (key/config presence), or every ask pays an extra round-trip. Existing users' configs must not be silently rewritten; the wizard's confirm step covers it.
 
 **Size:** M.
 

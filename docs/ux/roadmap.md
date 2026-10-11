@@ -21,12 +21,13 @@ Phased, dependency-ordered, no calendar dates. Phases ship in order; epics and s
 
 ## Phase 1 — Usable Out of the Box
 
-**Goal:** A fresh install works end-to-end: setup ends with an enabled current model, and every failure is visible and exit-coded.
+**Goal:** A fresh install works end-to-end: setup ends with a working model and key, keyless installs fail loudly (exit 4) instead of silently, and every failure is visible and exit-coded.
 
-**Epics:** E3 (Reliability & Error Surfacing — typed errors, exit codes 0/2/3/4/5, `smah doctor`, CPU/memory stats fix), E4 (Onboarding & First Run — enabled-by-default catalog, model-choice step in the wizard, data-location disclosure, y/n bug fix).
+**Epics:** E3 (Reliability & Error Surfacing — typed errors, exit codes 0/2/3/4/5, `smah doctor`, CPU/memory stats fix), E4 (Onboarding & First Run — preflight key check + exit-4 path, catalog staleness refresh, model-choice step in the wizard, data-location disclosure, y/n bug fix).
 
 **Exit criteria:**
 - Fresh install → wizard → first query answers, no hand-edited files (CI-verified with a fake provider).
+- Keyless installs exit 4 with the missing-key message before any provider call (today they register models anyway, fail at the call, and get swallowed into a silent exit 0).
 - The error-message table renders verbatim for every failure class; scripts branch on exit codes.
 - `smah doctor` distinguishes healthy from broken installs with actionable output.
 

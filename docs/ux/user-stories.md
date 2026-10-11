@@ -15,10 +15,10 @@ Acceptance criteria are the forward contract: for `[works today]` stories they d
 ## First run & onboarding
 
 ### US-01 — First query works straight after setup `[broken]`
-As **Dana (P3)**, I want to complete first-run setup and immediately get an answer to my first question, so that my introduction to SMAH is a success rather than a crash.
+As **Dana (P3)**, I want to complete first-run setup and immediately get an answer to my first question, so that my introduction to SMAH is a success rather than a silent no-op.
 Epic: E4.
 - [ ] Fresh install → run `smah ask "..."` → completes setup → gets an answer, no hand-edited files.
-- [ ] Defaults register at least one enabled, current model (today: shipped catalog is frozen at late-2024 ids with nothing usable out of the box; the first planner call dies at `smah/runner/runner.py:374` per inventory §4).
+- [ ] A keyless install fails loudly *before* any provider call: exit 4 with the missing-key message. Today the opposite happens — models register anyway because registration gates on `enabled` + `is_configured()` and neither check looks for an API key (`smah/settings/inference/inference.py:37-42`, `provider.py:33-41`, `model.py:76-83`), the provider call then fails at runtime, and `smah/smah.py:175-176` swallows it into a silent exit 0.
 - [ ] Setup ends by printing the exact next command to try.
 
 ### US-02 — Re-run setup non-destructively `[works today]`

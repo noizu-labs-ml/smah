@@ -305,12 +305,11 @@ $ smah doctor
   database    ok      /Users/ina/.smah/smah.db · 27 sessions · schema current
   key         FAIL    anthropic: no api key found
                       fix: 'smah config' or export ANTHROPIC_API_KEY
-  models      FAIL    0 models enabled
-                      fix: 'smah models enable anthropic.claude-opus-5-5'
+  models      ok      2 enabled · defaults set
   catalog     ok      no stale model ids
-  provider    FAIL    skipped (no key, no enabled models)
+  provider    FAIL    anthropic: can't authenticate — no api key
 
-  3 checks failed.
+  2 checks failed.
   $ echo $?
   4
 ```
