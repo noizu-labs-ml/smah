@@ -42,16 +42,20 @@ class Provider:
 
     def api_key(self, args):
         if self.identifier == "openai":
-            k = args.openai_api_key or self.settings.get("api_key")
-            if k:
-                if k.startswith("$"):
-                    k = k.lstrip("$").lstrip("{").rstrip("}")
-                    return os.environ.get(k)
-                else:
-                    return k
+            # args may be None (provider constructed without a CLI namespace);
+            # the settings block is still consulted in that case.
+            flag = getattr(args, "openai_api_key", None) if args is not None else None
+            k = flag or self.settings.get("api_key")
+        else:
+            k = self.settings.get("api_key")
+        if k:
+            if k.startswith("$"):
+                k = k.lstrip("$").lstrip("{").rstrip("}")
+                return os.environ.get(k)
             else:
-                return os.environ.get("SMAH_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
-        return None
+                return k
+        env_prefix = self.identifier.upper()
+        return os.environ.get(f"SMAH_{env_prefix}_API_KEY") or os.environ.get(f"{env_prefix}_API_KEY")
 
     def to_yaml(self, options = None):
         options = options or {}

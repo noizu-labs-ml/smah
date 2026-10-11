@@ -85,7 +85,7 @@ class System:
                 "shell": self.shell,
                 "operating_system": self.operating_system.to_yaml(options=options) if self.operating_system else None,
                 "cpu": self.cpu.readings(),
-                "memory": self.cpu.readings(),
+                "memory": self.memory.readings(),
                 "disk": self.disk.readings()
             }
         else:

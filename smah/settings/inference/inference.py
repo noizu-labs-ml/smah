@@ -26,7 +26,7 @@ class Inference:
         config_data = config_data or {}
         self.vsn = config_data.get("vsn", self.config_vsn())
         self.instructions: Optional[str] = config_data.get("instructions")
-        self.model_picker = config_data.get("model_picker") or {"default": ["openai.gpt-4o-mini"]}
+        self.model_picker = config_data.get("model_picker") or {"default": ["anthropic.claude-haiku-5-5", "openai.gpt-4o-mini"]}
         self.providers: dict[str,Provider] = {}
         providers = config_data.get("providers", {})
         for k, v in providers.items():
