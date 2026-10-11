@@ -239,3 +239,64 @@ def test_unknown_provider_as_selected_model_still_exits_config(tmp_path, monkeyp
         raised = e
     assert raised is not None
     assert raised.code == int(ExitCode.CONFIG)
+
+
+MALFORMED_PROVIDER_CONFIG = {
+    "model_picker": {
+        "query": ["anthropic.claude-haiku-5-5", "openai.gpt-4o-mini"],
+        "default": ["anthropic.claude-haiku-5-5", "openai.gpt-4o-mini"],
+    },
+    "providers": {
+        "anthropic": {
+            "name": "Anthropic",
+            "enabled": True,
+            "settings": {"api_key": {"bad": "shape"}},
+            "models": [{"name": "claude-haiku-5-5", "model": "claude-haiku-5-5", "enabled": True}],
+        },
+        "openai": {
+            "name": "OpenAI",
+            "enabled": True,
+            "models": [{"name": "gpt-4o-mini", "model": "gpt-4o-mini", "enabled": True}],
+        },
+    },
+}
+
+
+def test_malformed_provider_block_among_candidates_is_skipped(tmp_path, monkeypatch, caplog):
+    # Finding 3221acbf: a known-key provider whose settings block is
+    # malformed must be skipped while probing — with a debug breadcrumb, not
+    # a silent swallow — so a later healthy candidate still wins.
+    import logging
+
+    clean_provider_env(monkeypatch)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-test")
+
+    runner = make_runner(tmp_path, Inference(MALFORMED_PROVIDER_CONFIG))
+    with caplog.at_level(logging.DEBUG):
+        planner = runner.inference_model("query")
+    assert planner is not None
+    assert planner.provider == "openai"
+    assert planner.model == "gpt-4o-mini"
+    assert "anthropic" in caplog.text
+
+
+def test_malformed_selected_provider_is_clean_config_exit(tmp_path, monkeypatch, capsys):
+    # The chosen provider with the same malformed block: clean exit 3, a
+    # readable message, no traceback.
+    from smah.exit_codes import ExitCode
+
+    clean_provider_env(monkeypatch)
+    runner = make_runner(tmp_path, Inference(MALFORMED_PROVIDER_CONFIG))
+    model = runner.settings.inference.models["anthropic.claude-haiku-5-5"]
+    try:
+        runner.run(model, [{"role": "user", "content": "hi"}])
+        raised = None
+    except SystemExit as e:
+        raised = e
+    assert raised is not None
+    assert raised.code == int(ExitCode.CONFIG)
+    err = capsys.readouterr().err
+    flat = " ".join(err.split())  # err_console wraps lines mid-string
+    assert "malformed" in flat
+    assert "smah --configure" in flat
+    assert "Traceback" not in err

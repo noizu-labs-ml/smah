@@ -53,6 +53,18 @@ Safety and reliability wave:
   expresses "parameter not set" across the contract and the Anthropic
   provider; only `openai_provider.py` touches the OpenAI SDK's sentinel,
   translating `UNSET` to `NOT_GIVEN` when it builds its request.
+- The unset-sentinel boundary is tolerant: `is_unset()` in the neutral layer
+  treats `UNSET`, `None`, and — defensively, duck-typed by class name so no
+  vendor SDK is imported — another SDK's sentinel instance as "not set". A
+  stray vendor sentinel can never be serialized into a request body.
+- Candidate probing is resilient to malformed provider config, not just
+  unknown keys: an exception while constructing a known-key provider, or a
+  settings block whose `api_key` cannot be read (wrong shape/type), skips
+  that candidate with a debug-level breadcrumb (visible with `-v`) and the
+  next candidate is tried. The hard exit for the provider actually chosen to
+  run is unchanged and now also covers a malformed block: clean exit 3 with
+  a readable `malformed ... smah --configure` message, never a traceback
+  and never a silent skip.
 - Provider abstraction (`smah/providers/`): the runner now resolves providers
   by config key through a registry (`openai`, `anthropic`) behind a shared
   contract (credential resolution without ever printing keys, normalized

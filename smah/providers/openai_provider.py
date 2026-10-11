@@ -15,7 +15,7 @@ import openai
 from openai import NOT_GIVEN, OpenAIError
 
 from smah.exit_codes import ExitCode, fatal
-from smah.providers.base import UNSET, Unset, Completion, Provider, log_payload
+from smah.providers.base import UNSET, Unset, Completion, Provider, is_unset, log_payload
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from smah.settings.inference.provider.model import Model
@@ -64,7 +64,7 @@ class OpenAIProvider(Provider):
             "OpenAI Completion Payload",
             {
                 'model': model.to_yaml(),
-                'response_format': response_format if response_format is not UNSET else False,
+                'response_format': False if is_unset(response_format) else response_format,
                 'options': options or False,
                 'thread': messages
             },
@@ -85,10 +85,10 @@ class OpenAIProvider(Provider):
         else:
             max_completion_tokens = NOT_GIVEN
 
-        # UNSET (vendor-neutral) becomes the OpenAI SDK's own NOT_GIVEN here;
-        # only this provider may touch the OpenAI sentinel.
-        sdk_response_format = response_format if response_format is not UNSET else NOT_GIVEN
-        sdk_tools = tools if tools is not UNSET else NOT_GIVEN
+        # Unset-or-foreign-sentinel (vendor-neutral is_unset) becomes the
+        # OpenAI SDK's own NOT_GIVEN here; only this provider touches it.
+        sdk_response_format = NOT_GIVEN if is_unset(response_format) else response_format
+        sdk_tools = NOT_GIVEN if is_unset(tools) else tools
 
         try:
             response = client.chat.completions.create(

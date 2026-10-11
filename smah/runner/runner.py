@@ -330,7 +330,22 @@ class Runner:
                     args=self.args,
                     settings_provider=self.settings.inference.providers.get(candidate.provider)
                 )
-                if provider is not None and provider.has_credentials():
+                if provider is None:
+                    continue
+                try:
+                    usable = provider.has_credentials()
+                except Exception as exc:
+                    # e.g. a malformed settings block whose api_key cannot be
+                    # read — same failure class as construction: skip, but
+                    # leave a debug breadcrumb (visible with -v).
+                    logging.debug(
+                        "Skipping candidate '%s' (provider '%s'): the credential probe failed (%s).",
+                        key,
+                        candidate.provider,
+                        exc
+                    )
+                    continue
+                if usable:
                     return candidate
         return first_registered
 

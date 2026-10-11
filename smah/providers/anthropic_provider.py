@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, NoReturn, Optional
 import anthropic
 
 from smah.exit_codes import ExitCode, fatal
-from smah.providers.base import UNSET, Unset, Completion, Provider, log_payload
+from smah.providers.base import UNSET, Unset, Completion, Provider, is_unset, log_payload
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from smah.settings.inference.provider.model import Model
@@ -87,7 +87,7 @@ class AnthropicProvider(Provider):
         ]
 
         system_prompt = system
-        if response_format is not UNSET and response_format is not None:
+        if not is_unset(response_format):
             # Anthropic has no response_format parameter; ask for JSON in the
             # system prompt and parse defensively on the way out.
             system_prompt = (
@@ -109,7 +109,7 @@ class AnthropicProvider(Provider):
             {
                 'model': model.to_yaml(),
                 'system': system_prompt or False,
-                'response_format': response_format if response_format is not UNSET else False,
+                'response_format': False if is_unset(response_format) else response_format,
                 'options': options or False,
                 'thread': messages
             },

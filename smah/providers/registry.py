@@ -7,6 +7,7 @@ a message naming the known providers.
 """
 from __future__ import annotations
 
+import logging
 from typing import Optional, Type
 
 from smah.exit_codes import ExitCode, fatal
@@ -32,14 +33,25 @@ def maybe_get_provider(
 ) -> Optional[Provider]:
     """
     Resolve a provider without exiting: returns None when the key names no
-    known provider. Use while probing candidates (model picker lists, config
-    catalogs) where an unknown key should skip the candidate, not kill the
-    run; use get_provider() for the provider actually chosen to run.
+    known provider or when its block is malformed enough that construction
+    fails (logged at debug level, visible with -v — never a silent skip).
+    Use while probing candidates (model picker lists, config catalogs) where
+    a bad candidate should skip, not kill, the run; use get_provider() for
+    the provider actually chosen to run.
     """
     cls = PROVIDER_CLASSES.get(key)
     if cls is None:
         return None
-    return cls(args=args, settings_provider=settings_provider)
+    try:
+        return cls(args=args, settings_provider=settings_provider)
+    except Exception as exc:
+        logging.debug(
+            "Skipping provider '%s' while probing candidates: its implementation could not "
+            "be constructed (%s).",
+            key,
+            exc
+        )
+        return None
 
 
 def get_provider(
@@ -51,7 +63,9 @@ def get_provider(
     Resolve a provider implementation by config key.
 
     Raises:
-        SystemExit (3): the key names no known provider — a config problem.
+        SystemExit (3): the key names no known provider, or the selected
+            provider's block is malformed — both config problems, both a
+            clean readable message rather than a traceback.
     """
     cls = PROVIDER_CLASSES.get(key)
     if cls is None:
@@ -62,4 +76,11 @@ def get_provider(
             f"`smah --configure`.",
             ExitCode.CONFIG
         )
-    return cls(args=args, settings_provider=settings_provider)
+    try:
+        return cls(args=args, settings_provider=settings_provider)
+    except Exception as exc:
+        fatal(
+            f"The config for the '{key}' provider is malformed and could not be loaded "
+            f"({exc}). Fix the provider block in the SMAH config or run `smah --configure`.",
+            ExitCode.CONFIG
+        )

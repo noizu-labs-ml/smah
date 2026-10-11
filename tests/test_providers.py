@@ -429,3 +429,134 @@ def test_openai_rate_limit_maps_to_provider_exit(monkeypatch):
         with pytest.raises(SystemExit) as excinfo:
             provider.complete(_openai_model(), [{"role": "user", "content": "hi"}])
     assert excinfo.value.code == int(ExitCode.PROVIDER)
+
+
+# ----------------------------------------------------------------------
+# Round 3: exception-tolerant probing, hard exit-3 for the chosen provider,
+# and sentinel tolerance at the vendor boundary.
+# ----------------------------------------------------------------------
+class _ExplodingProvider(OpenAIProvider):
+    """Stands in for any provider whose construction fails on bad config."""
+
+    def __init__(self, args=None, settings_provider=None):
+        raise ValueError("boom: malformed provider block")
+
+
+def test_maybe_get_provider_skips_candidate_whose_construction_fails(monkeypatch, caplog):
+    # Finding 3221acbf: an exception from __init__ during probing must skip
+    # the candidate (with a debug breadcrumb), not kill the run.
+    import logging
+
+    from smah.providers import registry
+
+    monkeypatch.setitem(registry.PROVIDER_CLASSES, "anthropic", _ExplodingProvider)
+    with caplog.at_level(logging.DEBUG):
+        provider = registry.maybe_get_provider("anthropic", args=None, settings_provider=None)
+    assert provider is None
+    assert "anthropic" in caplog.text  # discoverable, not silently swallowed
+
+
+def test_get_provider_malformed_construction_is_clean_config_exit(monkeypatch, capsys):
+    # The other half of 3221acbf: the chosen provider with a malformed block
+    # must be a clean exit 3 with a readable message — no traceback.
+    from smah.providers import registry
+
+    monkeypatch.setitem(registry.PROVIDER_CLASSES, "anthropic", _ExplodingProvider)
+    with pytest.raises(SystemExit) as excinfo:
+        registry.get_provider("anthropic", args=None, settings_provider=None)
+    assert excinfo.value.code == int(ExitCode.CONFIG)
+    err = capsys.readouterr().err
+    assert "malformed" in err
+    assert "smah --configure" in err
+    assert "Traceback" not in err
+
+
+def test_malformed_settings_api_key_probe_reports_no_credentials(monkeypatch, caplog):
+    # Probing half: has_credentials() on a malformed settings block reports
+    # "unusable" (False) with a debug breadcrumb instead of raising.
+    import logging
+
+    from smah.settings.inference.provider.provider import Provider as ProviderSettings
+
+    clean_env(monkeypatch)
+    block = ProviderSettings("anthropic", {
+        "name": "Anthropic", "enabled": True,
+        "settings": {"api_key": {"bad": "shape"}},
+    })
+    provider = get_provider("anthropic", args=None, settings_provider=block)
+    with caplog.at_level(logging.DEBUG):
+        assert provider.has_credentials() is False
+    assert "anthropic" in caplog.text
+
+
+def test_malformed_settings_api_key_chosen_provider_is_clean_config_exit(monkeypatch, capsys):
+    # Chosen half: the same malformed block exits 3 readably on the run path.
+    from smah.settings.inference.provider.provider import Provider as ProviderSettings
+
+    clean_env(monkeypatch)
+    block = ProviderSettings("anthropic", {
+        "name": "Anthropic", "enabled": True,
+        "settings": {"api_key": {"bad": "shape"}},
+    })
+    provider = get_provider("anthropic", args=None, settings_provider=block)
+    with pytest.raises(SystemExit) as excinfo:
+        provider.require_api_key()
+    assert excinfo.value.code == int(ExitCode.CONFIG)
+    err = capsys.readouterr().err
+    flat = " ".join(err.split())  # err_console wraps lines mid-string
+    assert "malformed" in flat
+    assert "api_key" in flat
+    assert "smah --configure" in flat
+    assert "Traceback" not in err
+
+
+def test_is_unset_recognizes_own_and_foreign_sentinels():
+    from smah.providers import UNSET, is_unset
+
+    assert is_unset(UNSET) is True
+    assert is_unset(None) is True
+    assert is_unset(NOT_GIVEN) is True  # another SDK's sentinel, tolerated
+    assert is_unset({"type": "json_object"}) is False
+
+
+def test_anthropic_treats_foreign_sentinel_as_unset(monkeypatch):
+    # If an undetected caller still passes openai's NOT_GIVEN, the neutral
+    # layer must treat it as "not set" — never serialize it into a request.
+    clean_env(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    provider = get_provider("anthropic", args=SimpleNamespace(), settings_provider=None)
+    client = anthropic_response([text_block("answer")])
+
+    with mock.patch("anthropic.Anthropic", return_value=client):
+        completion = provider.complete(
+            claude_model(),
+            [{"role": "user", "content": "hi"}],
+            response_format=NOT_GIVEN,
+        )
+
+    kwargs = client.messages.create.call_args.kwargs
+    assert "system" not in kwargs  # no JSON instruction: the format was unset
+    assert "response_format" not in kwargs
+    assert "NotGiven" not in str(kwargs)
+    assert completion.text == "answer"
+
+
+def test_openai_translates_foreign_sentinel_to_sdk_not_given(monkeypatch):
+    provider = _openai_provider(monkeypatch)
+    client = mock.MagicMock()
+    client.chat.completions.create.return_value = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(role="assistant", content="answer"))]
+    )
+
+    with mock.patch("openai.OpenAI", return_value=client):
+        completion = provider.complete(
+            _openai_model(context={"window": 128000, "out": 16384}),
+            [{"role": "user", "content": "hi"}],
+            response_format=NOT_GIVEN,
+            tools=NOT_GIVEN,
+        )
+
+    kwargs = client.chat.completions.create.call_args.kwargs
+    assert kwargs["response_format"] is NOT_GIVEN  # translated, not leaked
+    assert kwargs["tools"] is NOT_GIVEN
+    assert completion.text == "answer"

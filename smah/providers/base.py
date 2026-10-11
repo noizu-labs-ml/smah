@@ -38,11 +38,10 @@ if TYPE_CHECKING:  # pragma: no cover - typing only, avoids a runtime cycle
 
 class _Unset:
     """
-    Sentinel for "parameter not set" — vendor-neutral on purpose. The provider
-    abstraction must not borrow one vendor SDK's sentinel (the runner still
-    accepts openai's NOT_GIVEN for signature compatibility, but it is
-    translated to UNSET before reaching providers; each vendor provider
-    translates UNSET to its own SDK's sentinel internally).
+    Sentinel for "parameter not set" — vendor-neutral on purpose. The
+    provider abstraction must not borrow one vendor SDK's sentinel; each
+    vendor provider translates UNSET to its own SDK's sentinel internally
+    (see is_unset() for the boundary-tolerance rules).
     """
     __slots__ = ()
 
@@ -52,6 +51,28 @@ class _Unset:
 
 Unset = _Unset
 UNSET: Unset = _Unset()
+
+
+def is_unset(value: Any) -> bool:
+    """
+    True when a parameter means "not set".
+
+    Recognizes our UNSET sentinel and None, and — defensively, duck-typed by
+    class name so the neutral layer never imports a vendor SDK — another
+    SDK's sentinel instance (e.g. openai's NotGiven) if an undetected caller
+    still passes one, so it can never be serialized into a request body.
+    """
+    if value is UNSET or value is None:
+        return True
+    return type(value).__name__ in ("NotGiven", "NotGivenType")
+
+
+class ProviderSettingsError(Exception):
+    """
+    The configured settings block for a provider is malformed and its API key
+    cannot be read (bad types, wrong shape). The chosen-provider path turns
+    this into a clean exit 3; candidate probing treats it as "skip".
+    """
 
 
 @dataclass
@@ -113,19 +134,40 @@ class Provider(ABC):
         `settings.api_key` including `$ENV_VAR` indirection) then the
         SMAH_<KEY>_API_KEY / <KEY>_API_KEY environment variables.
 
+        Raises:
+            ProviderSettingsError: the settings block is malformed and its
+                key cannot be read.
+
         Returns:
             The resolved key, or None when no credential is available.
         """
         if self.settings_provider is not None:
-            key = self.settings_provider.api_key(self.args)
+            try:
+                key = self.settings_provider.api_key(self.args)
+            except Exception as exc:
+                raise ProviderSettingsError(
+                    f"the '{self.key}' provider's api_key setting could not be read ({exc})"
+                ) from exc
             if key:
                 return key
         prefix = self.key.upper()
         return os.environ.get(f"SMAH_{prefix}_API_KEY") or os.environ.get(f"{prefix}_API_KEY")
 
     def has_credentials(self) -> bool:
-        """Whether a credential is resolvable for this provider (never prints it)."""
-        return bool(self.resolve_api_key())
+        """
+        Whether a credential is resolvable for this provider (never prints
+        it). Used while probing picker candidates: a malformed settings block
+        counts as "no usable credential" there — logged at debug level, never
+        swallowed silently. The chosen-provider path surfaces the same
+        failure as a clean exit 3 via require_api_key().
+        """
+        try:
+            return bool(self.resolve_api_key())
+        except ProviderSettingsError as exc:
+            logging.debug(
+                "Credential probe failed for provider '%s': %s", self.key, exc
+            )
+            return False
 
     @abstractmethod
     def credential_help(self) -> str:
@@ -133,10 +175,18 @@ class Provider(ABC):
 
     def require_api_key(self) -> str:
         """
-        Preflight: resolve the key or exit 4 (auth) with provider-specific
-        guidance. Must run before any network activity.
+        Preflight: resolve the key or exit with provider-specific guidance.
+        Must run before any network activity. A malformed settings block is a
+        config problem: clean exit 3 with a readable message.
         """
-        key = self.resolve_api_key()
+        try:
+            key = self.resolve_api_key()
+        except ProviderSettingsError as exc:
+            fatal(
+                f"The config for this provider is malformed ({exc}). Fix the provider block "
+                "in the SMAH config or run `smah --configure`.",
+                ExitCode.CONFIG
+            )
         if not key:
             fatal(self.credential_help(), ExitCode.AUTH_OR_MODEL)
         return key
