@@ -30,9 +30,36 @@ Safety and reliability wave:
   doing nothing after the API call fails.
 - Default model catalog is now Claude-first: Anthropic provider with
   `claude-opus-5-5` (query/pipe work) and `claude-haiku-5-5` (planner/picker
-  stage); existing OpenAI entries are unchanged. Note: only the OpenAI provider
-  is wired up in this version — selecting a Claude model exits 4 with guidance
-  until provider support lands.
+  stage); existing OpenAI entries are unchanged. Anthropic is fully wired up
+  (see the provider abstraction entry below): a default install with only
+  `ANTHROPIC_API_KEY` set gets a working Claude query out of the box.
+- Provider abstraction (`smah/providers/`): the runner now resolves providers
+  by config key through a registry (`openai`, `anthropic`) behind a shared
+  contract (credential resolution without ever printing keys, normalized
+  `Completion` text, typed-exception-to-exit-code translation) instead of
+  branching on `provider == "openai"`. The exit-4 "only the OpenAI provider
+  is wired up" path is gone; unknown provider keys in config exit 3. The
+  OpenAI request path is behavior-preserving (same credentials rules, request
+  parameters, and payload logging). Anthropic calls go through the official
+  `anthropic` SDK (new dependency): system prompt as the top-level `system`
+  parameter, required `max_tokens` (16000), no `budget_tokens`/`temperature`/
+  `top_p`, and content parsed block-by-block (`type == "text"` only) rather
+  than assuming `content[0]`. Provider errors map to exit codes: missing key
+  or rejected key → 4 (naming the env var for that provider, plus
+  `smah --configure`), rate limit / API 4xx-5xx / network → 5, unknown
+  provider key → 3. Credential preflight runs before any network call.
+- Model picking is credential-aware: the picker prefers the first listed
+  model whose provider has a resolvable key, falling through the task list to
+  the default list — so an OpenAI-key-only install still gets a working
+  model, and a Claude-first install with `ANTHROPIC_API_KEY` runs Claude.
+- Security fix: `exec-if` conditions from model output were evaluated with
+  Python `eval()` (arbitrary code execution from model-supplied strings; it
+  also crashed with NameError whenever a condition referenced a variable and
+  the conditions list was empty). Conditions are now parsed with `ast` and
+  walked over a strict whitelist (constants, names, not/and/or,
+  ==/!=/</<=/>/>=/in/not in; JSON-style `true`/`false`/`null` normalized).
+  Anything else — calls, attribute access, subscripts, unknown names — skips
+  the command with a notice on stderr instead of executing.
 - Flag honesty pass: removed `--gui` (no GUI exists), `--model-picker`,
   `--model-interactive`, `--model-review`, `--model-edit`, `--openai-api-tier`
   and `--openai-api-org` (parsed but never used). `--interactive` now states it

@@ -7,14 +7,14 @@ import rich.box
 from typing import Optional, Tuple
 
 import yaml
-from openai import OpenAI, NotGiven, NOT_GIVEN
-from openai.types.chat import ChatCompletion
+from openai import NotGiven, NOT_GIVEN
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
 
 from smah.console import std_console, err_console
 from smah.exit_codes import ExitCode, fatal
+from smah.providers import Completion, Provider, get_provider
 from smah.runner.response_parser import ResponseParser
 from smah.settings.inference.provider.model import Model
 from smah.runner.prompts import Prompts
@@ -69,50 +69,8 @@ class Runner:
 
 
     @staticmethod
-    def log_openai_completion_request(
-            model: Model,
-            thread: list,
-            response_format: dict | NotGiven,
-            options: Optional[dict] = None,
-            show: bool = False,
-            level: int = logging.INFO
-    ) -> None:
-        payload = yaml.dump(
-            {
-                'model': model.to_yaml(),
-                'response_format': response_format if response_format != NOT_GIVEN else False,
-                'options': options or False,
-                'thread': thread
-            },
-            sort_keys=False
-        )
-        logging.log(level, f"OpenAI Completion Payload:\n{payload}")
-        if show:
-            err_console.print(Panel(
-                Markdown("```yaml\n" + payload + "\n```\n"),
-                title="OpenAI Completion Payload",
-                style="bold white",
-                box=rich.box.ROUNDED)
-            )
-
-    @staticmethod
-    def log_openai_completion_response(response: ChatCompletion, level = logging.INFO, show: bool = False) -> None:
-        payload = yaml.dump(
-            response,
-            sort_keys=False
-        )
-        logging.log(level, f"OpenAI Completion Response:\n{payload}")
-        if show:
-            err_console.print(Panel(
-                Markdown("```yaml\n" + payload + "\n```\n"),
-                title="OpenAI Completion Response",
-                style="bold white",
-                box=rich.box.ROUNDED)
-            )
-
-    @staticmethod
-    def planner_response(response: ChatCompletion) -> Tuple[bool, dict] | None:
-        plan = json.loads(response.choices[0].message.content)
+    def planner_response(response: Completion) -> Tuple[bool, dict] | None:
+        plan = json.loads(ResponseParser.extract_json(response.text))
         required_keys = ["title", "model", "reason", "include_settings", "include_settings_reason", "format_output",
                          "format_output_reason", "instructions"]
         if all(key in plan for key in required_keys):
@@ -129,23 +87,6 @@ class Runner:
 
 
 
-
-    def openai_client(self):
-        provider = self.settings.inference.providers.get('openai')
-        if provider is None:
-            fatal(
-                "No OpenAI provider is configured. Run `smah --configure` and set an API key, "
-                "or add an `openai` provider block to your config file.",
-                ExitCode.AUTH_OR_MODEL
-            )
-        api_key = provider.api_key(self.args)
-        if not api_key:
-            fatal(
-                "No OpenAI API key found. Set the OPENAI_API_KEY (or SMAH_OPENAI_API_KEY) environment "
-                "variable, pass --openai-api-key, or run `smah --configure`.",
-                ExitCode.AUTH_OR_MODEL
-            )
-        return OpenAI(api_key=api_key)
 
     @staticmethod
     def replace_exec_tags(content: str):
@@ -300,11 +241,11 @@ class Runner:
             response = self.run(model, thread)
 
             # Response
-            message = Prompts.message(role=response.choices[0].message.role, content=response.choices[0].message.content)
+            message = Prompts.message(role=response.role, content=response.text)
             self.print_message(message, format=self.args.rich)
 
             # Extract Commands
-            commands = ResponseParser.extract_commands(response.choices[0].message.content) or []
+            commands = ResponseParser.extract_commands(response.text) or []
             self.show_suggested_commands(commands)
 
             # Update Chat History
@@ -322,56 +263,29 @@ class Runner:
             tools: dict | NotGiven = NOT_GIVEN,
             options: Optional[dict] = None,
             show: bool = False
-            ):
+            ) -> Completion:
         options = options or {}
         if model is None:
             fatal(
                 "No usable model is configured. Run `smah --configure` and enable a model, or pass "
-                "--model / --model-query / --model-pipe explicitly (e.g. --model openai.gpt-4o-mini).",
+                "--model / --model-query / --model-pipe explicitly "
+                "(e.g. --model anthropic.claude-opus-5-5 or --model openai.gpt-4o-mini).",
                 ExitCode.AUTH_OR_MODEL
             )
-        if model.provider == "openai":
-            self.log_openai_completion_request(
-                model=model,
-                thread=thread,
-                response_format=response_format,
-                options=options,
-                show=show
-                )
-
-            client = self.openai_client()
-            model_settings = model.settings or {}
-
-            max_output_tokens = model.context.get("out", 4096)
-            max_tokens = options.get("max_tokens", model_settings.get("max_tokens", max_output_tokens))
-            max_completion_tokens = options.get("max_completion_tokens", model.settings.get("max_completion_tokens", max_tokens))
-
-            if model_settings.get("max_completion_tokens"):
-                max_tokens = NOT_GIVEN
-            else:
-                max_completion_tokens = NOT_GIVEN
-
-            response = client.chat.completions.create(
-                model=model.model,
-                messages=thread,
-                max_completion_tokens=max_completion_tokens,
-                max_tokens=max_tokens,
-                response_format=response_format,
-                tools=tools
-            )
-            self.log_openai_completion_response(response, show=show)
-
-            return response
-
-        fatal(
-            f"The model '{model.provider}.{model.name}' uses the '{model.provider}' provider, which this "
-            f"version of SMAH cannot run yet (only the OpenAI provider is wired up). Select an OpenAI model "
-            f"with --model / --model-query / --model-pipe (e.g. openai.gpt-4o-mini), or adjust model_picker "
-            f"in ~/.smah/config.yaml.",
-            ExitCode.AUTH_OR_MODEL
+        provider = self.provider_for(model)
+        return provider.complete(
+            model=model,
+            thread=thread,
+            response_format=response_format,
+            tools=tools,
+            options=options,
+            show=show
         )
 
-
+    def provider_for(self, model: Model) -> Provider:
+        """Resolve the configured provider implementation for a model (exits 3 on unknown keys)."""
+        settings_provider = self.settings.inference.providers.get(model.provider)
+        return get_provider(model.provider, args=self.args, settings_provider=settings_provider)
 
     def inference_model(self, task: str) -> Optional[Model]:
         model = None
@@ -383,11 +297,24 @@ class Runner:
         if model:
             return model
 
-        l = self.settings.inference.model_picker.get(task) or self.settings.inference.model_picker.get('default') or []
-        for key in l:
+        picker = self.settings.inference.model_picker
+        candidates = list(picker.get(task) or [])
+        # A task-specific list (e.g. query: claude-only) may name no provider
+        # the user has credentials for — fall through to the default list so a
+        # user with only an OpenAI (or only an Anthropic) key still gets a
+        # working model.
+        for key in picker.get('default') or []:
+            if key not in candidates:
+                candidates.append(key)
+        first_registered = None
+        for key in candidates:
             if key in self.settings.inference.models:
-                return self.settings.inference.models[key]
-        return None
+                candidate = self.settings.inference.models[key]
+                if first_registered is None:
+                    first_registered = candidate
+                if self.provider_for(candidate).has_credentials():
+                    return candidate
+        return first_registered
 
     def query_plan(self, query: str) -> Optional[Tuple[bool, dict]]:
         self.log_mode("Query Plan", show=self.args.verbose >= 1)
@@ -468,11 +395,11 @@ class Runner:
             )
 
 
-            msg = {'role': 'assistant', 'content': response.choices[0].message.content}
+            msg = {'role': response.role, 'content': response.text}
             self.print_message(msg, format=self.args.rich)
 
             # Extract Commands
-            commands = ResponseParser.extract_commands(response.choices[0].message.content) or []
+            commands = ResponseParser.extract_commands(response.text) or []
             self.show_suggested_commands(commands)
 
 
@@ -483,13 +410,13 @@ class Runner:
                 p,
                 [
                     Prompts.message(content=request),
-                    {'role': 'assistant', 'content': response.choices[0].message.content}
+                    {'role': response.role, 'content': response.text}
                 ]
             )
 
 
 
-            return response.choices[0].message.content
+            return response.text
         return None
 
 
@@ -534,7 +461,7 @@ class Runner:
                     Prompts.message(content=request),
                 ]
             )
-            response_body = response.choices[0].message.content
+            response_body = response.text
             if p["format_output"] and self.args.rich:
                 std_console.print(Markdown(response_body))
             else:
@@ -554,9 +481,9 @@ class Runner:
                 p,
                 [
                     Prompts.message(content=request),
-                    {'role': 'assistant', 'content': response.choices[0].message.content}
+                    {'role': response.role, 'content': response.text}
                 ],
                 pipe=pipe
             )
-            return response.choices[0].message.content
+            return response.text
         return None

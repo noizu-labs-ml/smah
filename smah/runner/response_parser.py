@@ -1,7 +1,86 @@
+import ast
 import textwrap
 from enum import Enum
 from typing import Optional
+
 from lxml import etree
+
+from smah.console import err_console
+
+
+class ConditionError(ValueError):
+    """
+    An exec-if condition cannot be evaluated safely: unknown variable, unsafe
+    construct (attribute access, calls, subscripts...), or a type mismatch.
+    """
+
+
+def _compare(op: ast.cmpop, left, right) -> bool:
+    try:
+        if isinstance(op, ast.Eq):
+            return left == right
+        if isinstance(op, ast.NotEq):
+            return left != right
+        if isinstance(op, ast.Lt):
+            return left < right
+        if isinstance(op, ast.LtE):
+            return left <= right
+        if isinstance(op, ast.Gt):
+            return left > right
+        if isinstance(op, ast.GtE):
+            return left >= right
+        if isinstance(op, ast.In):
+            return left in right
+        if isinstance(op, ast.NotIn):
+            return left not in right
+    except TypeError as exc:
+        raise ConditionError(f"cannot compare {left!r} with {right!r}") from exc
+    raise ConditionError("unsupported comparison operator")
+
+
+def _eval_condition_node(node: ast.AST, names: dict):
+    """Walk a whitelisted expression AST. Anything else raises ConditionError."""
+    if isinstance(node, ast.Expression):
+        return _eval_condition_node(node.body, names)
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.Name):
+        # Models emit JSON-style literals (true/false/null) that are not
+        # Python constants; normalize them instead of failing the condition.
+        if node.id in names:
+            return names[node.id]
+        if node.id == "true":
+            return True
+        if node.id == "false":
+            return False
+        if node.id == "null":
+            return None
+        raise ConditionError(f"unknown condition variable '{node.id}'")
+    if isinstance(node, ast.BoolOp):
+        if isinstance(node.op, ast.And):
+            for value in node.values:
+                if not _eval_condition_node(value, names):
+                    return False
+            return True
+        if isinstance(node.op, ast.Or):
+            for value in node.values:
+                if _eval_condition_node(value, names):
+                    return True
+            return False
+        raise ConditionError("unsupported boolean operator")
+    if isinstance(node, ast.UnaryOp):
+        if isinstance(node.op, ast.Not):
+            return not _eval_condition_node(node.operand, names)
+        raise ConditionError("unsupported unary operator")
+    if isinstance(node, ast.Compare):
+        left = _eval_condition_node(node.left, names)
+        for op, comparator in zip(node.ops, node.comparators):
+            right = _eval_condition_node(comparator, names)
+            if not _compare(op, left, right):
+                return False
+            left = right
+        return True
+    raise ConditionError(f"unsupported expression node: {type(node).__name__}")
 
 html_tags = [
     "a",
@@ -340,9 +419,18 @@ class ResponseParser:
                 if isinstance(elem, ExecTag):
                     conditions = options.get("conditions") or {}
                     # include operator and system
-                    c = elem.exec_if
-                    c = ResponseParser.unescape_response(c)
-                    if c is None or eval(c, conditions):
+                    condition = elem.exec_if  # already unescaped by the property
+                    include = True
+                    skip_reason = None
+                    if condition is not None:
+                        try:
+                            include = ResponseParser.eval_condition(condition, conditions)
+                            if not include:
+                                skip_reason = f"falsy condition: {condition}"
+                        except ConditionError as exc:
+                            include = False
+                            skip_reason = f"unevaluable condition: {condition} ({exc})"
+                    if include:
                         c = {
                             'title': ResponseParser.unescape_response(elem.title),
                             'purpose': ResponseParser.unescape_response(elem.purpose),
@@ -351,8 +439,48 @@ class ResponseParser:
                         }
                         commands.append(c)
                     else:
-                        print(f"Skipping command: {elem.title} due to falsy condition: {c}")
+                        err_console.print(f"Skipping command: {elem.title} due to {skip_reason}")
         return commands
+
+    @staticmethod
+    def eval_condition(condition: str, names: Optional[dict] = None) -> bool:
+        """
+        Safely evaluate an exec-if condition written by the model.
+
+        The condition is parsed with `ast` and walked over a strict whitelist
+        of expression nodes: constants, variable names, not/and/or, and the
+        comparisons ==/!=/</<=/>/>=/in/not in. There is no eval()/exec() on
+        model output anywhere: unknown names, attribute access, calls,
+        subscripts, and any other construct raise ConditionError instead of
+        executing. Callers treat an unevaluable condition as "skip command".
+        """
+        names = names or {}
+        try:
+            tree = ast.parse(condition, mode="eval")
+        except SyntaxError as exc:
+            raise ConditionError(f"not a valid expression: {condition}") from exc
+        return bool(_eval_condition_node(tree, names))
+
+    @staticmethod
+    def extract_json(response: str) -> str:
+        """
+        Best-effort extraction of a JSON object from a model response: strips
+        markdown code fences and any prose around the outermost {...} pair.
+        A response that already is a bare JSON object passes through unchanged.
+        """
+        text = (response or "").strip()
+        if text.startswith("```"):
+            newline = text.find("\n")
+            text = text[newline + 1:] if newline != -1 else ""
+            if text.rstrip().endswith("```"):
+                text = text.rstrip()[:-3]
+            text = text.strip()
+        if not text.startswith("{"):
+            start = text.find("{")
+            end = text.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                text = text[start:end + 1]
+        return text
 
     @staticmethod
     def escape_response(response: str) -> str:
