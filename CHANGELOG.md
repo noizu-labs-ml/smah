@@ -4,6 +4,51 @@ CHANGE LOG
 
 ## Changes
 
+### 0.2.1
+October 11 2026
+
+Subcommand restructure per `docs/ux/interface-spec.md`:
+
+- New command surface: `smah ask "<question>"` (one-shot; piped stdin is the
+  data), `smah history`, `smah resume [ID|--last]`, `smah config
+  [show|path|edit|set]`, `smah models list`, `smah doctor`, and `smah chat`
+  (honestly not implemented: prints a notice and exits 2 — it is never faked).
+- Every legacy flag (`-q/--query`, `-i/--instructions`, `--continue`,
+  `--session`, `--history`, `--interactive`, `--configure`,
+  `--openai-api-key`) still works and runs the new equivalent after a
+  one-line `[deprecation]` notice on stderr. Legacy aliases are removed in
+  0.4. `--interactive` never worked and now points at `smah chat`.
+- `smah doctor` reports config found/valid, selected provider, API key
+  presence (never the value), enabled model count and defaults, database/
+  migration state, and per-stage resolved models. Read-only: no network, no
+  provider clients, never creates files. Exit code is the worst finding
+  (0 healthy, 3 config/database, 4 auth/models).
+- `smah config show` prints the config with secret values masked (`$ENV`
+  indirection shown as `<env:NAME>`); `smah config set key value` writes
+  single dotted keys with bool/int coercion; `smah config edit` re-runs the
+  wizard.
+- `smah models list` shows enabled/disabled models, which is the default for
+  query/pipe/picker, and notes the answering model is planner-chosen.
+- Bare `smah` (no args, no piped stdin) prints a concise subcommand-pointing
+  usage and exits 2. Piped stdin without a query asks for one explicitly.
+- Pipe safety: stdout carries content only (answers and machine-readable
+  output of `history`, `models list`, `doctor --json`, `config show`/`path`);
+  all notices, deprecations, and diagnostics go to stderr. Exit codes survive
+  piping. Rich formatting follows TTY detection; `--rich/--no-rich` override.
+- Fresh-install hardening: `smah ask`/`resume` with no config file exit 3 with
+  an actionable message ("Run 'smah config'") instead of launching a wizard
+  that dies on EOF with an opaque internal error. The setup wizard only ever
+  runs on a real terminal with stdin free; explicit `smah config`/`--configure`
+  without a terminal exits 3 with "needs an interactive terminal".
+- The setup wizard's entire UI (panels, prompts) now goes to stderr — stdout
+  stays machine-consumable even mid-wizard.
+- Only `ask` (and the legacy/bare piped path) consumes stdin. `doctor`,
+  `models`, `history`, `config`, `resume`, and `chat` never read stdin, so an
+  inherited open pipe (CI, daemons) can no longer hang them.
+- Removed flags stay removed with honest messages (`--setup never existed`,
+  etc.). New `--api-key` flag replaces `--openai-api-key` for the active
+  provider.
+
 ### 0.2.0
 October 11 2026
 

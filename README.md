@@ -40,7 +40,7 @@ the best output format, runner model, additional instructions nad other details.
 ```
 pip install smah
 ## call smah to begin setup. 
-smah --configure
+smah config
 ```
 
 or 
@@ -53,7 +53,23 @@ or
 - setup python env (conda, venv, etc.)
 - navigate to smah folder and run `poetry install`
 - set SMAH_OPENAI_API_KEY env variable or set key in your smah config file `~/.smah/config.yaml`
-- run smah --configure
+- run smah config
+
+## Commands
+
+```
+smah ask "<question>"     one-shot question; piped stdin is the data
+smah chat                 interactive session (not implemented yet — exits 2 with a notice)
+smah history              list recent sessions
+smah resume [ID|--last]   resume a session
+smah config [show|path|edit|set]   run setup, or inspect/edit the config (secrets masked)
+smah models list          list configured models and defaults
+smah doctor               check the installation (config, key presence, models, database)
+```
+
+All older flags (`-q`, `-i`, `--continue`, `--session`, `--history`, `--interactive`,
+`--configure`, `--openai-api-key`) still work and map to the commands above; each
+prints a one-line `[deprecation]` notice on stderr. They are removed in 0.4.
 
 ## Examples
 
@@ -63,35 +79,35 @@ or
 Analyze Access Log Entries
 
 ```sh
-tail -n 500 /var/log/auth.log | smah -q "Analyze these access log entries and output a markdown summary with tables of suspicious ips and events."  
+tail -n 500 /var/log/auth.log | smah ask "Analyze these access log entries and output a markdown summary with tables of suspicious ips and events."  
 ```
 ![image](https://github.com/user-attachments/assets/445c0004-84db-46a9-b654-bb3c3692e73b)
 
 
 #### System Control Summary
 ```
-systemctl status | smah -i ~/SCAN-SYSTEMCTL.md
+systemctl status | smah ask --instructions ~/SCAN-SYSTEMCTL.md
 ```
-![image](https://github.com/user-attachments/assets/0304e06c-bb6f-4a2c-894d-f672225b1b83)
+![image](https://github.com/user-attachments/assets/0304e06c-4a2c-894d-f672225b1b83)
 
 
 
 #### System Task
 ```sh
-smah -q "How do I setup a web proxy on this server that I can connect to via my remote desktop to access the web?"
+smah ask "How do I setup a web proxy on this server that I can connect to via my remote desktop to access the web?"
  ```
 ![image](https://github.com/user-attachments/assets/b712fbd7-7e2b-4e1f-9320-71c48fe90e58)
 
 #### Resume last chat 
 
 ```sh
-smah --continue
+smah resume --last
 ```
 
 #### Resume recent or (pending) search old conversations to pick up from.
 
 ```sh
-smah --history
+smah history
 ```
 ![image](https://github.com/user-attachments/assets/6da1841e-5014-468b-b933-6b215853c80e)
 
@@ -100,92 +116,108 @@ smah --history
 #### Resume by id.
 
 ```sh
-smah --session ID
+smah resume ID
 ```
 
 #### Saved Prompt
 ```
-systemctl status | smah -i ~/.scan-status.md 
+systemctl status | smah ask --instructions ~/.scan-status.md 
+```
+
+#### Check the installation
+```
+smah doctor
+```
+
+#### See configured models and defaults
+```
+smah models list
+```
+
+#### Print the config with secrets masked
+```
+smah config show
 ```
 
 #### Help
 ```
-usage: smah [-h] [-q QUERY] [-i INSTRUCTIONS] [--continue | --no-continue]
-            [--session SESSION] [--history | --no-history]
-            [--interactive | --no-interactive] [--model MODEL]
-            [--model-query MODEL_QUERY] [--model-pipe MODEL_PIPE]
-            [--openai-api-key OPENAI_API_KEY] [--rich | --no-rich] [-c CONFIG]
-            [--database DATABASE] [--configure | --no-configure] [-v]
+usage: smah [<global flags>] <command> [<args>]
 
-SMAH: a system-aware command line assistant. Ask a question or pipe input through an LLM that knows your OS and preferences.
-SMAH prints suggested commands with explanations; it never executes them.
+SMAH — the sysadmin helper. SMAH does not run commands: it drafts
+them, explains them, and hands them off for you to review and run.
 
 options:
   -h, --help            show this help message and exit
 
-input:
-  -q QUERY, --query QUERY
-                        The question or task to process (required unless
-                        resuming a session)
-  -i INSTRUCTIONS, --instructions INSTRUCTIONS
-                        Path to a file whose contents are used as the query
-
-sessions:
-  --continue, --no-continue
-                        Resume the most recent conversation
-  --session SESSION     Resume a specific conversation by id
-  --history, --no-history
-                        Pick one of the 10 most recent conversations to resume
-  --interactive, --no-interactive
-                        Interactive chat mode (NOT IMPLEMENTED: exits with an
-                        error)
-
-models:
-  --model MODEL         Override the model used to answer (e.g.
+global flags:
+  -c, --config CONFIG   Config file (default: ~/.smah/config.yaml)
+  --database DATABASE   Session database (default: ~/.smah/smah.db)
+  -v, --verbose         Repeatable: -v plans, -vv payloads, -vvv settings dump
+                        (all output to stderr)
+  --model MODEL         Override the model for this run (fully qualified, e.g.
                         openai.gpt-4o-mini)
   --model-query MODEL_QUERY
                         Model used for the query planning stage
   --model-pipe MODEL_PIPE
                         Model used for the pipe planning stage
-  --openai-api-key OPENAI_API_KEY
-                        OpenAI API key (prefer the SMAH_OPENAI_API_KEY /
-                        OPENAI_API_KEY env vars or the config file)
+  --api-key API_KEY     API key for the active provider (else env/config)
+  --rich, --no-rich     Force formatting on/off (default: TTY detection)
 
-output:
-  --rich, --no-rich     Render responses as rich Markdown instead of plain
-                        text
+commands:
+  Run 'smah <command> --help' for per-command options and examples.
 
-configuration:
-  -c CONFIG, --config CONFIG
-                        Path to an alternative config file (default:
-                        ~/.smah/config.yaml)
-  --database DATABASE   Path to the sqlite history database (default:
-                        ~/.smah/smah.db)
+  <command>
+    ask                 Ask a one-shot question (argument or piped stdin)
+    chat                Start an interactive session (NOT IMPLEMENTED yet)
+    history             List recent sessions
+    resume              Resume a saved session (default: most recent)
+    config              Run setup, or show/edit the config
+    models              List configured models
+    doctor              Check the installation and report problems
+
+legacy flags (deprecated — still accepted, notice on stderr):
+  -q, --query QUERY     DEPRECATED: prefer 'smah ask "<query>"'
+  -i, --instructions INSTRUCTIONS
+                        DEPRECATED: prefer 'smah ask --instructions'
+  --continue, --no-continue
+                        DEPRECATED: prefer 'smah resume' — resume the most
+                        recent conversation
+  --session SESSION     DEPRECATED: prefer 'smah resume N' — resume a specific
+                        conversation by id
+  --history, --no-history
+                        DEPRECATED: prefer 'smah history' — pick one of the 10
+                        most recent conversations to resume
+  --interactive, --no-interactive
+                        DEPRECATED (NOT IMPLEMENTED): use 'smah chat'
   --configure, --no-configure
-                        Run the interactive setup wizard
+                        DEPRECATED: prefer 'smah config' — run the interactive
+                        setup wizard
+  --openai-api-key OPENAI_API_KEY
+                        DEPRECATED: prefer '--api-key' (applies to the active
+                        provider)
 
-diagnostics:
-  -v, --verbose         Increase verbosity (repeatable: -v, -vv, -vvv). -v
-                        shows plans and payloads, -vvv also dumps settings
+exit codes:
+  0 ok · 2 usage · 3 config · 4 auth or no models · 5 provider
+
+Data & config live under ~/.smah/ — see 'smah doctor' for exact paths.
 
 examples:
   # summarize the tail of an auth log (pipe processing)
-  tail -n 500 /var/log/auth.log | smah -q "Analyze these access log entries and output a markdown summary with tables of suspicious ips and events."
+  tail -n 500 /var/log/auth.log | smah ask "Analyze these access log entries and output a markdown summary with tables of suspicious ips and events."
 
   # process piped output using a saved instruction file
-  systemctl status | smah -i ~/SCAN-SYSTEMCTL.md
+  systemctl status | smah ask --instructions ~/SCAN-SYSTEMCTL.md
 
   # ask a plain question
-  smah -q "How do I setup a web proxy on this server that I can connect to via my remote desktop to access the web?"
+  smah ask "How do I setup a web proxy on this server that I can connect to via my remote desktop to access the web?"
 
   # resume your most recent conversation
-  smah --continue
+  smah resume --last
+```
 
 input piping:
   When stdin is not a terminal its full contents are captured and sent along
-  with your query (a query passed with -q or -i is still required).
-```
-
+  with the query as the data to process.
 
 
 ## Setup
