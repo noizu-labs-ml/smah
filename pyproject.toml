@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "smah"
 version = "0.2.0"
-description = "OpenAI Driven system and user preference aware commandline GPT with pipe processing support and conversation history."
+description = "Smart-as-hell sysadmin helper: turns plain-language questions into explained shell commands and summarizes piped logs. Prints and explains — never executes. Works with Claude and OpenAI models."
 authors = ["Keith Brings <keith.brings@noizu.com>"]
 readme = "README.md"
 package-mode = true
@@ -9,13 +9,16 @@ homepage = "https://github.com/noizu-labs-ml/smah"
 documentation = "https://smah.readthedocs.io/en/latest/"
 repository = "https://github.com/noizu-labs-ml/smah"
 license = "MIT"
-keywords = ["openai", "command-line", "system", "automation", "smart-pipe"]
+keywords = ["claude", "anthropic", "openai", "llm", "command-line", "sysadmin", "system", "automation", "smart-pipe"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: System :: Systems Administration",
 ]
