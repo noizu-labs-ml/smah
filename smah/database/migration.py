@@ -1,11 +1,13 @@
 import argparse
 import hashlib
 import os
+import sys
 import time
 import importlib
 import textwrap
 import sqlite3
 from smah.database.database import Database
+from smah.exit_codes import ExitCode
 
 class Migration:
     # Migrations are stored in the `migrations` directory
@@ -89,7 +91,7 @@ class Migration:
             if not silent:
                 print(r)
             if exit_on_finish:
-                exit(2)
+                sys.exit(ExitCode.UNEXPECTED_ERROR)
             return ("error", ("Migration Failed", r))
 
 
@@ -125,7 +127,7 @@ class Migration:
             if not silent:
                 print(r)
             if exit_on_finish:
-                exit(2)
+                sys.exit(ExitCode.UNEXPECTED_ERROR)
             return "error", ("Rollback Failed", r)
 
     @staticmethod
@@ -155,7 +157,7 @@ class Migration:
                         cursor.close()
                     else:
                         if exit_on_finish:
-                            exit(1)
+                            sys.exit(ExitCode.UNEXPECTED_ERROR)
                         else:
                             return "error", ("Checksum Mismatch", r)
 
@@ -164,14 +166,14 @@ class Migration:
                     if not silent:
                         print(r)
                     if exit_on_finish:
-                        exit(0)
+                        sys.exit(ExitCode.OK)
                     else:
                         return "success", r
             else:
                 outcome, details = Migration.apply_migration(database, migration, silent=silent, exit_on_finish=exit_on_finish)
                 if outcome == "error":
                     if exit_on_finish:
-                        exit(2)
+                        sys.exit(ExitCode.UNEXPECTED_ERROR)
                     else:
                         return outcome, details
 
@@ -181,7 +183,7 @@ class Migration:
                     if not silent:
                         print(r)
                     if exit_on_finish:
-                        exit(0)
+                        sys.exit(ExitCode.OK)
                     else:
                         return "success", r
 
@@ -191,7 +193,7 @@ class Migration:
                         print(r)
 
                     if exit_on_finish:
-                        exit(0)
+                        sys.exit(ExitCode.OK)
                     else:
                         return "success", r
 
@@ -222,16 +224,16 @@ class Migration:
                     break
             if not available:
                 print(f"Migration --to '{args.to}' not applied or available")
-                exit(1)
+                sys.exit(ExitCode.USAGE)
         for migration in tracked_migrations:
             Migration.rollback_migration(database, available_migrations[migration['migration']])
             count += 1
             if args.count and count >= args.count:
                 print(f"Rollback Complete: changes applied {count}")
-                exit(0)
+                sys.exit(ExitCode.OK)
             if args.to and args.to == migration['migration']:
                 print(f"Rollback Complete: changes applied {count}")
-                exit(0)
+                sys.exit(ExitCode.OK)
         if count == 0:
             print("No Migrations Available for Rollback")
         else:
@@ -243,7 +245,7 @@ class Migration:
         tracked_migrations = {m['migration']: m for m in Migration.get_schema_migrations(database)}
         if not available_migrations:
             print("No Migrations Available")
-            exit(0)
+            sys.exit(ExitCode.OK)
         out = ""
         for migration in available_migrations:
             migration['applied'] = False

@@ -20,15 +20,15 @@ pipe processing and other tasks tailored to your background and operating system
 ### Purpose
 
 SMAH is designed to:
-1. **Generate Commands**: Avoid endless searches through documentation. Simply describe what you want to do, and SMAH generates the necessary command while explaining potential impacts and asking for confirmation before execution. You just want to use ffmpeg(tm) to convert a mp4 into a gif. 
+1. **Generate Commands**: Avoid endless searches through documentation. Simply describe what you want to do, and SMAH generates the necessary command and explains its potential impact. SMAH prints suggested commands for you to review and run yourself — it never executes them. You just want to use ffmpeg(tm) to convert a mp4 into a gif. 
 2. **Assisted Pipe Generation**: Take advantage of SMAH’s ability to assist in generating complex pipes and chaining commands in Unix environments.
 3. **AI-Assisted Monitoring (pending)**: Set up system monitoring tasks quickly with AI guidance, allowing you to keep track of critical metrics and thresholds without manual configuration.
 
 ### Key Features
 
-- **Interactive Command Generation**: SMAH can guide you through setting up environments, managing packages, configuring system services, and more, by generating commands and helping you understand their implications before execution. And ask questions as it (pending) process your query.
+- **Interactive Command Generation**: SMAH can guide you through setting up environments, managing packages, configuring system services, and more, by generating commands and explaining their implications; you review and run them yourself. And ask questions as it (pending) process your query.
 - **User Preferences and Personalization**: SMAH remembers your preferences for certain tools (e.g., package managers, environment management tools) and uses those to generate optimal commands, saving time and reducing repetitive configuration.
-- **Command Confirmation and Safety**: For safety and control, SMAH will always ask for confirmation before running any system-altering command. You’ll also be given an overview of what the command will do and the expected impact on your system.
+- **Print-Only Commands (Safety)**: For safety, SMAH never runs commands. Each suggested command is printed in a clearly delimited block with an explanation of what it does and its expected impact, ready for you to copy and run yourself. If pyperclip is installed the command is also copied to your clipboard.
 - **Model Planning/Prompt Planning**: A fast model is used to look at a sample of pipe data or your inquiry in order to decide
 the best output format, runner model, additional instructions nad other details.
 
@@ -40,7 +40,7 @@ the best output format, runner model, additional instructions nad other details.
 ```
 pip install smah
 ## call smah to begin setup. 
-smah --setup
+smah --configure
 ```
 
 or 
@@ -53,7 +53,7 @@ or
 - setup python env (conda, venv, etc.)
 - navigate to smah folder and run `poetry install`
 - set SMAH_OPENAI_API_KEY env variable or set key in your smah config file `~/.smah/config.yaml`
-- run smah --setup
+- run smah --configure
 
 ## Examples
 
@@ -103,12 +103,6 @@ smah --history
 smah --session ID
 ```
 
-#### Interative Mode
-
-```sh
-smah --interactive
-```
-
 #### Saved Prompt
 ```
 systemctl status | smah -i ~/.scan-status.md 
@@ -116,53 +110,80 @@ systemctl status | smah -i ~/.scan-status.md
 
 #### Help
 ```
-> smah -h
-usage: smah [-h] [-q QUERY] [-i INSTRUCTIONS] [--interactive | --no-interactive] [-c CONFIG] [--database DATABASE] [--configure | --no-configure] [--continue | --no-continue] [--session SESSION] [--history | --no-history]
-            [-v] [--model MODEL] [--model-picker MODEL_PICKER] [--model-query MODEL_QUERY] [--model-pipe MODEL_PIPE] [--model-interactive MODEL_INTERACTIVE] [--model-review MODEL_REVIEW] [--model-edit MODEL_EDIT]
-            [--openai-api-tier OPENAI_API_TIER] [--openai-api-key OPENAI_API_KEY] [--openai-api-org OPENAI_API_ORG] [--gui | --no-gui] [--rich | --no-rich]
+usage: smah [-h] [-q QUERY] [-i INSTRUCTIONS] [--continue | --no-continue]
+            [--session SESSION] [--history | --no-history]
+            [--interactive | --no-interactive] [--model MODEL]
+            [--model-query MODEL_QUERY] [--model-pipe MODEL_PIPE]
+            [--openai-api-key OPENAI_API_KEY] [--rich | --no-rich] [-c CONFIG]
+            [--database DATABASE] [--configure | --no-configure] [-v]
 
-SMAH Command Line Tool
+SMAH: a system-aware command line assistant. Ask a question or pipe input through an LLM that knows your OS and preferences.
+SMAH prints suggested commands with explanations; it never executes them.
 
 options:
   -h, --help            show this help message and exit
+
+input:
   -q QUERY, --query QUERY
-                        The Query to process
+                        The question or task to process (required unless
+                        resuming a session)
   -i INSTRUCTIONS, --instructions INSTRUCTIONS
-                        The Instruction File to process
-  --interactive, --no-interactive
-                        Run in interactive mode (default: False)
-  -c CONFIG, --config CONFIG
-                        Path to alternative config file
-  --database DATABASE   Path to sqlite smah database
-  --configure, --no-configure
-                        Enter Config Setup (default: False)
+                        Path to a file whose contents are used as the query
+
+sessions:
   --continue, --no-continue
-                        Continue Last Conversation (default: False)
-  --session SESSION     Resume Session
+                        Resume the most recent conversation
+  --session SESSION     Resume a specific conversation by id
   --history, --no-history
-                        Resume Recent Session (default: False)
-  -v, --verbose         Set Verbosity Level, such as -vv
-  --model MODEL         Default Model
-  --model-picker MODEL_PICKER
-                        Picker Model
+                        Pick one of the 10 most recent conversations to resume
+  --interactive, --no-interactive
+                        Interactive chat mode (NOT IMPLEMENTED: exits with an
+                        error)
+
+models:
+  --model MODEL         Override the model used to answer (e.g.
+                        openai.gpt-4o-mini)
   --model-query MODEL_QUERY
-                        Query Model
+                        Model used for the query planning stage
   --model-pipe MODEL_PIPE
-                        Pipe Processing Model
-  --model-interactive MODEL_INTERACTIVE
-                        Interactive Processing Model
-  --model-review MODEL_REVIEW
-                        Output Reviewer Model
-  --model-edit MODEL_EDIT
-                        Output Editor Model
-  --openai-api-tier OPENAI_API_TIER
-                        OpenAI Tier
+                        Model used for the pipe planning stage
   --openai-api-key OPENAI_API_KEY
-                        OpenAI Api Key
-  --openai-api-org OPENAI_API_ORG
-                        OpenAI Api Org
-  --gui, --no-gui       Run in GUI mode (default: False)
-  --rich, --no-rich     Rich Format Output (default: True)
+                        OpenAI API key (prefer the SMAH_OPENAI_API_KEY /
+                        OPENAI_API_KEY env vars or the config file)
+
+output:
+  --rich, --no-rich     Render responses as rich Markdown instead of plain
+                        text
+
+configuration:
+  -c CONFIG, --config CONFIG
+                        Path to an alternative config file (default:
+                        ~/.smah/config.yaml)
+  --database DATABASE   Path to the sqlite history database (default:
+                        ~/.smah/smah.db)
+  --configure, --no-configure
+                        Run the interactive setup wizard
+
+diagnostics:
+  -v, --verbose         Increase verbosity (repeatable: -v, -vv, -vvv). -v
+                        shows plans and payloads, -vvv also dumps settings
+
+examples:
+  # summarize the tail of an auth log (pipe processing)
+  tail -n 500 /var/log/auth.log | smah -q "Analyze these access log entries and output a markdown summary with tables of suspicious ips and events."
+
+  # process piped output using a saved instruction file
+  systemctl status | smah -i ~/SCAN-SYSTEMCTL.md
+
+  # ask a plain question
+  smah -q "How do I setup a web proxy on this server that I can connect to via my remote desktop to access the web?"
+
+  # resume your most recent conversation
+  smah --continue
+
+input piping:
+  When stdin is not a terminal its full contents are captured and sent along
+  with your query (a query passed with -q or -i is still required).
 ```
 
 
@@ -239,6 +260,7 @@ inference:
   instructions: null # Optional additional instructions to include in each request.
   model_picker:
     default:
+    - anthropic.claude-haiku-5-5
     - openai.gpt-4o-mini
     - openai.gpt-4o
   providers:

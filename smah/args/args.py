@@ -1,6 +1,8 @@
 import argparse
 import sys
 import logging
+import textwrap
+from typing import Optional
 
 def merge_args(args: argparse.Namespace, config: dict) -> argparse.Namespace:
     """
@@ -18,21 +20,37 @@ def merge_args(args: argparse.Namespace, config: dict) -> argparse.Namespace:
             setattr(args, key, value)
     return args
 
-def extract_args() -> tuple[argparse.Namespace, str | None]:
+def extract_args(argv: Optional[list[str]] = None) -> tuple[argparse.Namespace, str | None]:
     """
-    Parses and extracts command-line arguments for the SMAH CLI tool.
+    Parses and extracts command line arguments for the SMAH CLI tool.
+
+    Args:
+        argv (Optional[list[str]]): Argument list to parse instead of sys.argv
+            (used by tests; defaults to the process arguments).
 
     Returns:
-        parser (ArgumentParser): The argument parser with configured options.
         args (Namespace): Parsed arguments and options.
         pipe (str or None): Content read from standard input if available.
     """
-    parser = __initialize_argument_parser()
-    __add_general_arguments(parser)
-    __add_ai_arguments(parser)
-    __add_gui_arguments(parser)
-    a = parser.parse_args()
+    parser = build_parser()
+    a = parser.parse_args(argv)
     return a, __get_pipe()
+
+def build_parser() -> argparse.ArgumentParser:
+    """
+    Assembles the fully populated smah argument parser.
+
+    Returns:
+        ArgumentParser: The parser with all argument groups attached.
+    """
+    parser = __initialize_argument_parser()
+    __add_input_arguments(parser)
+    __add_session_arguments(parser)
+    __add_model_arguments(parser)
+    __add_output_arguments(parser)
+    __add_configuration_arguments(parser)
+    __add_diagnostic_arguments(parser)
+    return parser
 
 def __initialize_argument_parser():
     """
@@ -42,57 +60,103 @@ def __initialize_argument_parser():
         ArgumentParser: A configured argument parser.
     """
     return argparse.ArgumentParser(
-        description="SMAH Command Line Tool",
-        formatter_class=argparse.RawTextHelpFormatter
+        prog="smah",
+        description=(
+            "SMAH: a system-aware command line assistant. Ask a question or pipe input "
+            "through an LLM that knows your OS and preferences.\n"
+            "SMAH prints suggested commands with explanations; it never executes them."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=textwrap.dedent(
+            """\
+            examples:
+              # summarize the tail of an auth log (pipe processing)
+              tail -n 500 /var/log/auth.log | smah -q "Analyze these access log entries and output a markdown summary with tables of suspicious ips and events."
+
+              # process piped output using a saved instruction file
+              systemctl status | smah -i ~/SCAN-SYSTEMCTL.md
+
+              # ask a plain question
+              smah -q "How do I setup a web proxy on this server that I can connect to via my remote desktop to access the web?"
+
+              # resume your most recent conversation
+              smah --continue
+
+            input piping:
+              When stdin is not a terminal its full contents are captured and sent along
+              with your query (a query passed with -q or -i is still required).
+            """
+        )
     )
 
-
-def __add_general_arguments(parser: argparse.ArgumentParser) -> None:
+def __add_input_arguments(parser: argparse.ArgumentParser) -> None:
     """
-    Add general command-line arguments to the parser.
+    Add input arguments to the parser.
 
     Args:
-        parser (ArgumentParser): The argument parser to which general arguments are added.
+        parser (ArgumentParser): The argument parser to which input arguments are added.
     """
-    parser.add_argument('-q', '--query', type=str, help='The Query to process')
-    parser.add_argument('-i', '--instructions', type=str, help='The Instruction File to process')
-    parser.add_argument('--interactive', action=argparse.BooleanOptionalAction, help='Run in interactive mode', default=False)
-    parser.add_argument('-c', '--config', type=str, help='Path to alternative config file')
-    parser.add_argument('--database', type=str, help='Path to sqlite smah database')
-    parser.add_argument('--configure', action=argparse.BooleanOptionalAction, help='Enter Config Setup', default=False)
-    parser.add_argument('--continue', dest="resume", action=argparse.BooleanOptionalAction, help='Continue Last Conversation', default=False)
-    parser.add_argument('--session', type=int, help='Resume Session')
-    parser.add_argument('--history', action=argparse.BooleanOptionalAction, help='Resume Recent Session', default=False)
-    parser.add_argument('-v', '--verbose', action='count', default=0, help="Set Verbosity Level, such as -vv")
+    group = parser.add_argument_group("input")
+    group.add_argument('-q', '--query', type=str, help='The question or task to process (required unless resuming a session)')
+    group.add_argument('-i', '--instructions', type=str, help='Path to a file whose contents are used as the query')
 
-def __add_ai_arguments(parser: argparse.ArgumentParser) -> None:
+def __add_session_arguments(parser: argparse.ArgumentParser) -> None:
     """
-    Add specific AI-related command-line arguments to the parser.
+    Add conversation/session arguments to the parser.
 
     Args:
-        parser (ArgumentParser): The argument parser to which AI-related arguments are added.
+        parser (ArgumentParser): The argument parser to which session arguments are added.
     """
-    parser.add_argument('--model', type=str, help='Default Model')
-    parser.add_argument('--model-picker', type=str, help='Picker Model')
-    parser.add_argument('--model-query', type=str, help='Query Model')
-    parser.add_argument('--model-pipe', type=str, help='Pipe Processing Model')
-    parser.add_argument('--model-interactive', type=str, help='Interactive Processing Model')
-    parser.add_argument('--model-review', type=str, help='Output Reviewer Model')
-    parser.add_argument('--model-edit', type=str, help='Output Editor Model')
+    group = parser.add_argument_group("sessions")
+    group.add_argument('--continue', dest="resume", action=argparse.BooleanOptionalAction, help='Resume the most recent conversation', default=False)
+    group.add_argument('--session', type=int, help='Resume a specific conversation by id')
+    group.add_argument('--history', action=argparse.BooleanOptionalAction, help='Pick one of the 10 most recent conversations to resume', default=False)
+    group.add_argument('--interactive', action=argparse.BooleanOptionalAction, help='Interactive chat mode (NOT IMPLEMENTED: exits with an error)', default=False)
 
-    parser.add_argument('--openai-api-tier', type=int, help='OpenAI Tier')
-    parser.add_argument('--openai-api-key', type=str, help='OpenAI Api Key')
-    parser.add_argument('--openai-api-org', type=str, help='OpenAI Api Org')
-
-def __add_gui_arguments(parser: argparse.ArgumentParser) -> None:
+def __add_model_arguments(parser: argparse.ArgumentParser) -> None:
     """
-    Add GUI-related command-line arguments to the parser.
+    Add model-selection arguments to the parser.
 
     Args:
-        parser (ArgumentParser): The argument parser to which GUI-related arguments are added.
+        parser (ArgumentParser): The argument parser to which model arguments are added.
     """
-    parser.add_argument('--gui', action=argparse.BooleanOptionalAction, help='Run in GUI mode', default=False)
-    parser.add_argument('--rich', action=argparse.BooleanOptionalAction, help='Rich Format Output', default=True)
+    group = parser.add_argument_group("models")
+    group.add_argument('--model', type=str, help='Override the model used to answer (e.g. openai.gpt-4o-mini)')
+    group.add_argument('--model-query', type=str, help='Model used for the query planning stage')
+    group.add_argument('--model-pipe', type=str, help='Model used for the pipe planning stage')
+    group.add_argument('--openai-api-key', type=str, help='OpenAI API key (prefer the SMAH_OPENAI_API_KEY / OPENAI_API_KEY env vars or the config file)')
+
+def __add_output_arguments(parser: argparse.ArgumentParser) -> None:
+    """
+    Add output-formatting arguments to the parser.
+
+    Args:
+        parser (ArgumentParser): The argument parser to which output arguments are added.
+    """
+    group = parser.add_argument_group("output")
+    group.add_argument('--rich', action=argparse.BooleanOptionalAction, help='Render responses as rich Markdown instead of plain text', default=True)
+
+def __add_configuration_arguments(parser: argparse.ArgumentParser) -> None:
+    """
+    Add configuration arguments to the parser.
+
+    Args:
+        parser (ArgumentParser): The argument parser to which configuration arguments are added.
+    """
+    group = parser.add_argument_group("configuration")
+    group.add_argument('-c', '--config', type=str, help='Path to an alternative config file (default: ~/.smah/config.yaml)')
+    group.add_argument('--database', type=str, help='Path to the sqlite history database (default: ~/.smah/smah.db)')
+    group.add_argument('--configure', action=argparse.BooleanOptionalAction, help='Run the interactive setup wizard', default=False)
+
+def __add_diagnostic_arguments(parser: argparse.ArgumentParser) -> None:
+    """
+    Add diagnostic arguments to the parser.
+
+    Args:
+        parser (ArgumentParser): The argument parser to which diagnostic arguments are added.
+    """
+    group = parser.add_argument_group("diagnostics")
+    group.add_argument('-v', '--verbose', action='count', default=0, help='Increase verbosity (repeatable: -v, -vv, -vvv). -v shows plans and payloads, -vvv also dumps settings')
 
 def __get_pipe():
     """
