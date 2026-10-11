@@ -85,10 +85,10 @@ def list_models(args) -> None:
             default_for = " ".join(t for t in ("query", "pipe", "picker") if defaults[t] == mid) or "—"
             rows.append((pid, model.name or "?", default_for, enabled, status))
 
-    header = f"{'PROVIDER':<12}{'MODEL':<22}{'DEFAULT FOR':<14}{'ENABLED':<9}STATUS"
+    header = f"{'PROVIDER':<12}{'MODEL':<22}{'DEFAULT FOR':<18}{'ENABLED':<9}STATUS"
     print(header)
     for pid, name, default_for, enabled, status in rows:
-        print(f"{pid:<12}{name:<22}{default_for:<14}{enabled:<9}{status}")
+        print(f"{pid:<12}{name:<22}{default_for:<18}{enabled:<9}{status}")
 
     if not rows:
         err_console.print(

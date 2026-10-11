@@ -206,8 +206,8 @@ def main():
                     "add a query (e.g. smah ask \"summarize this\") to say what to do with it."
                 )
             else:
-                err_console.print(__usage())
-                err_console.print(f"[bold red]smah:[/bold red] {CHAT_NOTICE}", markup=False)
+                err_console.print(__usage(), markup=False, highlight=False)
+                err_console.print(f"[bold red]smah:[/bold red] {CHAT_NOTICE}")
             sys.exit(ExitCode.USAGE)
 
         init_database(args)
@@ -240,7 +240,7 @@ def __chat_unavailable() -> None:
     """
     Honest not-yet for chat (and, until chat ships, bare smah / --interactive).
     """
-    err_console.print(f"[bold red]smah:[/bold red] {CHAT_NOTICE}", markup=False)
+    err_console.print(f"[bold red]smah:[/bold red] {CHAT_NOTICE}")
     sys.exit(ExitCode.USAGE)
 
 
@@ -362,7 +362,7 @@ def __usage() -> str:
 
         Usage:
           smah ask "your question"               ask a one-shot question
-          cat app.log | smah ask "summarize"     process piped input (a query is still required)
+          cat app.log | smah ask "summarize"     process piped input (add a query)
           smah resume --last                     resume your most recent conversation
           smah history                           list recent conversations
           smah models list                       see configured models and defaults
