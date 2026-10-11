@@ -33,6 +33,17 @@ Safety and reliability wave:
   stage); existing OpenAI entries are unchanged. Anthropic is fully wired up
   (see the provider abstraction entry below): a default install with only
   `ANTHROPIC_API_KEY` set gets a working Claude query out of the box.
+- Planner robustness: a planner model that answers in prose instead of the
+  required JSON (possible wherever JSON mode is an instruction rather than a
+  native parameter) now fails cleanly with exit 5 and a message naming the
+  planner, instead of a JSONDecodeError traceback.
+- Model-picker candidate probing is tolerant: an unknown or unusable provider
+  key listed among picker candidates is skipped and the next candidate is
+  tried; the hard exit-3 for an unknown provider applies only to the provider
+  actually chosen to run.
+- Anthropic `max_tokens` honors the model's configured output budget
+  (catalog `context.out`, or a model-settings override) and falls back to
+  16000 only when the entry carries no budget.
 - Provider abstraction (`smah/providers/`): the runner now resolves providers
   by config key through a registry (`openai`, `anthropic`) behind a shared
   contract (credential resolution without ever printing keys, normalized

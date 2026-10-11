@@ -14,7 +14,7 @@ from rich.prompt import Prompt
 
 from smah.console import std_console, err_console
 from smah.exit_codes import ExitCode, fatal
-from smah.providers import Completion, Provider, get_provider
+from smah.providers import Completion, Provider, get_provider, maybe_get_provider
 from smah.runner.response_parser import ResponseParser
 from smah.settings.inference.provider.model import Model
 from smah.runner.prompts import Prompts
@@ -70,7 +70,18 @@ class Runner:
 
     @staticmethod
     def planner_response(response: Completion) -> Tuple[bool, dict] | None:
-        plan = json.loads(ResponseParser.extract_json(response.text))
+        try:
+            plan = json.loads(ResponseParser.extract_json(response.text))
+        except json.JSONDecodeError:
+            # Providers without native JSON mode can answer in prose despite
+            # the JSON-only instruction; that is a model-output failure, not a
+            # crash: readable message + exit 5, never a traceback.
+            fatal(
+                "The planner model did not return the required JSON plan (its output was not valid "
+                "JSON). Re-run the command, or pin a different planner model with "
+                "--model / --model-query / --model-pipe.",
+                ExitCode.PROVIDER
+            )
         required_keys = ["title", "model", "reason", "include_settings", "include_settings_reason", "format_output",
                          "format_output_reason", "instructions"]
         if all(key in plan for key in required_keys):
@@ -312,7 +323,15 @@ class Runner:
                 candidate = self.settings.inference.models[key]
                 if first_registered is None:
                     first_registered = candidate
-                if self.provider_for(candidate).has_credentials():
+                # Probe tolerantly: an unknown/unusable provider key in the
+                # picker list skips that candidate; the hard exit-3 for
+                # unknown providers stays on the provider actually chosen.
+                provider = maybe_get_provider(
+                    candidate.provider,
+                    args=self.args,
+                    settings_provider=self.settings.inference.providers.get(candidate.provider)
+                )
+                if provider is not None and provider.has_credentials():
                     return candidate
         return first_registered
 

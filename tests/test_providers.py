@@ -138,7 +138,7 @@ def test_anthropic_request_shape_system_top_level_max_tokens_no_forbidden_params
 
     kwargs = client.messages.create.call_args.kwargs
     assert kwargs["model"] == "claude-opus-5-5"
-    assert kwargs["max_tokens"] == 16000
+    assert kwargs["max_tokens"] == 32000  # honors the model's configured output budget
     # system is top-level only when provided; never a system-role message
     assert "system" not in kwargs
     assert all(m["role"] in ("user", "assistant") for m in kwargs["messages"])
@@ -166,6 +166,39 @@ def test_anthropic_response_format_becomes_json_system_instruction_not_response_
     assert isinstance(kwargs["system"], str)
     assert "JSON" in kwargs["system"]
     assert "response_format" not in kwargs
+
+
+def test_anthropic_max_tokens_falls_back_to_default_without_budget(monkeypatch):
+    clean_env(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    provider = get_provider("anthropic", args=SimpleNamespace(), settings_provider=None)
+    client = anthropic_response([text_block("ok")])
+    model = Model("anthropic", {"name": "claude-opus-5-5", "model": "claude-opus-5-5", "enabled": True})
+
+    with mock.patch("anthropic.Anthropic", return_value=client):
+        provider.complete(model, [{"role": "user", "content": "hi"}])
+
+    assert client.messages.create.call_args.kwargs["max_tokens"] == 16000
+
+
+def test_anthropic_max_tokens_options_override_model_budget(monkeypatch):
+    clean_env(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    provider = get_provider("anthropic", args=SimpleNamespace(), settings_provider=None)
+    client = anthropic_response([text_block("ok")])
+
+    with mock.patch("anthropic.Anthropic", return_value=client):
+        provider.complete(claude_model(), [{"role": "user", "content": "hi"}], options={"max_tokens": 512})
+
+    assert client.messages.create.call_args.kwargs["max_tokens"] == 512
+
+
+def test_maybe_get_provider_returns_none_for_unknown_keys():
+    from smah.providers import maybe_get_provider
+
+    assert maybe_get_provider("mistral", args=None, settings_provider=None) is None
+    resolved = maybe_get_provider("anthropic", args=SimpleNamespace(), settings_provider=None)
+    assert isinstance(resolved, AnthropicProvider)
 
 
 # ----------------------------------------------------------------------

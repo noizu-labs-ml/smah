@@ -30,8 +30,8 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from smah.settings.inference.provider.model import Model
     from smah.settings.inference.provider.provider import Provider as ProviderSettings
 
-# max_tokens is required by the Messages API. 16000 keeps well inside the
-# non-streaming response envelope; streaming is not wired up yet.
+# max_tokens is required by the Messages API. 16000 is the fallback when a
+# model entry carries no output budget; streaming is not wired up yet.
 ANTHROPIC_DEFAULT_MAX_TOKENS = 16000
 
 JSON_ONLY_INSTRUCTION = (
@@ -95,7 +95,15 @@ class AnthropicProvider(Provider):
                 f"{system_prompt}\n\n{JSON_ONLY_INSTRUCTION}" if system_prompt else JSON_ONLY_INSTRUCTION
             )
 
-        max_tokens = options.get("max_tokens", ANTHROPIC_DEFAULT_MAX_TOKENS)
+        # max_tokens is required by the Messages API. Honor the model's
+        # configured output budget (catalog `context.out`, model settings
+        # override) and fall back to the default only when absent.
+        model_settings = model.settings or {}
+        model_output_budget = (model.context or {}).get("out")
+        max_tokens = options.get(
+            "max_tokens",
+            model_settings.get("max_tokens", model_output_budget or ANTHROPIC_DEFAULT_MAX_TOKENS)
+        )
 
         log_payload(
             "Anthropic Completion Payload",

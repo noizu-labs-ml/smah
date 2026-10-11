@@ -7,7 +7,7 @@ a message naming the known providers.
 """
 from __future__ import annotations
 
-from typing import Type
+from typing import Optional, Type
 
 from smah.exit_codes import ExitCode, fatal
 from smah.providers.anthropic_provider import AnthropicProvider
@@ -23,6 +23,23 @@ PROVIDER_CLASSES: dict[str, Type[Provider]] = {
 def known_provider_keys() -> list[str]:
     """The provider keys SMAH knows how to run, sorted for stable messages."""
     return sorted(PROVIDER_CLASSES)
+
+
+def maybe_get_provider(
+        key: str,
+        args=None,
+        settings_provider=None
+) -> Optional[Provider]:
+    """
+    Resolve a provider without exiting: returns None when the key names no
+    known provider. Use while probing candidates (model picker lists, config
+    catalogs) where an unknown key should skip the candidate, not kill the
+    run; use get_provider() for the provider actually chosen to run.
+    """
+    cls = PROVIDER_CLASSES.get(key)
+    if cls is None:
+        return None
+    return cls(args=args, settings_provider=settings_provider)
 
 
 def get_provider(

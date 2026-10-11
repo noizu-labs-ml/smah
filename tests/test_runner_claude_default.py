@@ -159,3 +159,83 @@ def test_no_keys_anywhere_still_fails_with_named_env_var(tmp_path, monkeypatch):
     assert raised.code == int(ExitCode.AUTH_OR_MODEL)
     sdk.assert_not_called()  # preflight fired before any SDK construction
     client.messages.create.assert_not_called()
+
+
+def test_planner_prose_output_exits_five_with_readable_message(tmp_path, monkeypatch, capsys):
+    # The Anthropic JSON-mode shim is an instruction, so the planner can answer
+    # in prose; that must produce a clean exit-5 message, never a traceback.
+    from smah.exit_codes import ExitCode
+
+    clean_provider_env(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-only")
+
+    runner = make_runner(tmp_path, real_inference())
+    client, models_used = fake_anthropic_sdk(
+        "Sorry, I cannot answer that in JSON format.", "never reached"
+    )
+
+    with mock.patch("anthropic.Anthropic", return_value=client):
+        try:
+            runner.query("what is 2+2")
+            raised = None
+        except SystemExit as e:
+            raised = e
+
+    assert raised is not None
+    assert raised.code == int(ExitCode.PROVIDER)
+    assert len(models_used) == 1  # planner call only; no answer call happened
+    err = capsys.readouterr().err
+    assert "planner" in err
+    assert "JSON" in err
+    assert "Traceback" not in err
+
+
+UNKNOWN_PROVIDER_CONFIG = {
+    "model_picker": {
+        "query": ["mistral.big", "anthropic.claude-haiku-5-5"],
+        "default": ["anthropic.claude-haiku-5-5"],
+    },
+    "providers": {
+        "mistral": {
+            "name": "Mistral",
+            "enabled": True,
+            "models": [{"name": "big", "model": "mistral-large", "enabled": True}],
+        },
+        "anthropic": {
+            "name": "Anthropic",
+            "enabled": True,
+            "models": [{"name": "claude-haiku-5-5", "model": "claude-haiku-5-5", "enabled": True}],
+        },
+    },
+}
+
+
+def test_unknown_provider_among_picker_candidates_is_skipped(tmp_path, monkeypatch):
+    # An unknown provider key listed ahead of good candidates must not kill
+    # the run while probing; the working candidate is still selected.
+    clean_provider_env(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+
+    runner = make_runner(tmp_path, Inference(UNKNOWN_PROVIDER_CONFIG))
+    planner = runner.inference_model("query")
+    assert planner is not None
+    assert planner.provider == "anthropic"
+    assert planner.model == "claude-haiku-5-5"
+
+
+def test_unknown_provider_as_selected_model_still_exits_config(tmp_path, monkeypatch):
+    # Hard exit-3 stays on the provider actually chosen to run.
+    from smah.exit_codes import ExitCode
+
+    clean_provider_env(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+
+    runner = make_runner(tmp_path, Inference(UNKNOWN_PROVIDER_CONFIG))
+    mistral_model = runner.settings.inference.models["mistral.big"]
+    try:
+        runner.run(mistral_model, [{"role": "user", "content": "hi"}])
+        raised = None
+    except SystemExit as e:
+        raised = e
+    assert raised is not None
+    assert raised.code == int(ExitCode.CONFIG)
