@@ -26,7 +26,9 @@ Note:
 Ensure the environment is set up with the necessary dependencies before executing this script.
 """
 
+import contextlib
 import logging
+import os
 import sys
 import textwrap
 from types import SimpleNamespace
@@ -66,14 +68,7 @@ def resume_session(args, session: Optional[int] = None):
 
     if session:
         args = smah.args.merge_args(args, session['args'])
-        settings = __load_settings(args)
-
-        # If settings are not configured, ask user to provide necessary information
-        if not settings.is_configured() or args.configure:
-            settings = configurator(settings)
-            settings.log(print=True, format=True)
-        else:
-            settings.log(print=(args.verbose >= 3), format=True)
+        settings = __settings_or_wizard(args)
         runner = Runner(args, settings)
         runner.resume(id=session['id'], title=session['title'], plan=session['plan'], pipe=session['pipe'], messages=session['messages'])
     else:
@@ -273,14 +268,7 @@ def __run_query(args, pipe: Optional[str], query: str) -> None:
     Shared one-shot path: settings (first-run wizard included), then the
     runner's public query/pipe methods.
     """
-    settings = __load_settings(args)
-
-    # If settings are not configured, ask user to provide necessary information
-    if not settings.is_configured() or args.configure:
-        settings = configurator(settings)
-        settings.log(print=True, format=True)
-    else:
-        settings.log(print=(args.verbose >= 3), format=True)
+    settings = __settings_or_wizard(args, pipe)
     runner = Runner(args, settings)
 
     if pipe:
@@ -304,13 +292,59 @@ def __run_config(args) -> None:
         __config_wizard(args)
 
 
-def __config_wizard(args) -> None:
+def __config_wizard(args) -> Settings:
     """
-    Runs the interactive setup wizard (replaces --configure).
+    Runs the interactive setup wizard ('smah config', 'config edit', legacy
+    --configure).
+
+    Never launches unless stdin is a real terminal — a wizard nobody can
+    answer would die on EOF — and its entire UI is redirected to stderr:
+    stdout carries content only (interface spec §5).
     """
+    if not sys.stdin.isatty():
+        __exit_with("the setup wizard needs an interactive terminal. Run 'smah config' from a shell.", ExitCode.CONFIG)
     settings = __load_settings(args)
-    settings = configurator(settings)
+    # rich resolves sys.stdout lazily per print, so redirecting the name moves
+    # the wizard's panels and prompts; settings.log already targets stderr.
+    with contextlib.redirect_stdout(sys.stderr):
+        settings = configurator(settings)
     settings.log(print=True, format=True)
+    return settings
+
+
+def __settings_or_wizard(args, pipe: Optional[str] = None) -> Settings:
+    """
+    Loads settings for the ask/resume paths. A missing config file is an
+    ordinary, expected condition — exit 3 with an actionable message, never
+    an EOF-crashing wizard: the wizard only runs when someone can answer it
+    (a real terminal, and stdin not already consumed as piped data).
+    """
+    path = args.config or Settings.default_config()
+    settings = __load_settings(args)
+    explicit = bool(getattr(args, "configure", False))
+
+    if settings.is_configured() and not explicit:
+        settings.log(print=(args.verbose >= 3), format=True)
+        return settings
+
+    if explicit:
+        # explicit wizard request ('--configure' stored in session args)
+        return __config_wizard(args)
+
+    if not os.path.exists(path):
+        __exit_with(f"no config found at {path}. Run 'smah config' to create one.", ExitCode.CONFIG)
+    if pipe is not None or not sys.stdin.isatty():
+        __exit_with(f"config at {path} is incomplete; the setup wizard needs an interactive terminal. Run 'smah config'.", ExitCode.CONFIG)
+    return __config_wizard(args)
+
+
+def __exit_with(message: str, code: ExitCode) -> None:
+    """
+    Prints an expected-condition message to stderr and exits with the given
+    code (no traceback hint — these are not errors to debug).
+    """
+    err_console.print(f"[bold red]smah:[/bold red] {message}")
+    sys.exit(int(code))
 
 
 def __load_settings(args) -> Settings:

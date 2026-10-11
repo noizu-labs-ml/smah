@@ -71,7 +71,13 @@ def extract_args(argv: Optional[list[str]] = None) -> tuple[argparse.Namespace, 
     a = parser.parse_args(argv)
     __validate(a, parser)
     __normalize(a)
-    return a, __get_pipe()
+    # Stdin is consumed only by the commands that use piped input: 'ask' and
+    # the legacy/bare flag path. doctor/models/history/config/chat must never
+    # read stdin — an open non-tty stdin (CI jobs, daemons) would block them
+    # forever otherwise.
+    if getattr(a, "command", None) in (None, "ask"):
+        return a, __get_pipe()
+    return a, None
 
 def build_parser() -> argparse.ArgumentParser:
     """

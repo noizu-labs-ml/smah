@@ -170,6 +170,33 @@ def test_piped_stdin_is_captured_with_and_without_subcommand():
     assert args.ask_query == "summarize"
 
 
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["doctor"],
+        ["doctor", "--json"],
+        ["doctor", "--offline"],
+        ["models"],
+        ["models", "list"],
+        ["history"],
+        ["history", "--limit", "5"],
+        ["config"],
+        ["config", "show"],
+        ["config", "path"],
+        ["resume"],
+        ["resume", "--last"],
+        ["chat"],
+    ],
+)
+def test_non_input_commands_never_read_stdin(argv):
+    # doctor/models/history/config/resume/chat must not consume stdin: an
+    # open non-tty stdin (CI, daemons) would block them forever.
+    with mock.patch("smah.args.args.__get_pipe", side_effect=AssertionError("stdin read attempted")) as get_pipe:
+        args, pipe = extract_args(argv)
+    get_pipe.assert_not_called()
+    assert pipe is None
+
+
 # --- back-compat: legacy flags still parse and are recorded ------------------
 
 def test_legacy_flags_still_parse():

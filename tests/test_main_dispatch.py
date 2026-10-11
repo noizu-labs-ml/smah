@@ -1,3 +1,4 @@
+import io
 from types import SimpleNamespace
 from unittest import mock
 
@@ -8,6 +9,13 @@ from rich.console import Console
 
 import smah.smah as smah_main
 from smah.exit_codes import ExitCode
+
+
+class FakeTTY(io.StringIO):
+    """A stdin stand-in that claims to be a terminal."""
+
+    def isatty(self):
+        return True
 
 
 def base_args(**overrides):
@@ -194,7 +202,8 @@ def test_config_set_writes_value_and_hides_secrets(tmp_path, capsys):
 
 
 def test_config_bare_runs_wizard():
-    code, _ = run(base_args(command="config"))
+    with mock.patch("sys.stdin", FakeTTY("")):
+        code, _ = run(base_args(command="config"))
     assert code is None
 
 
@@ -305,8 +314,22 @@ def test_history_flag_keeps_pick_and_resume_behavior():
 
 
 def test_configure_flag_runs_wizard_and_exits_cleanly():
-    code, _ = run(base_args(configure=True, deprecated=["--configure"]))
+    with mock.patch("sys.stdin", FakeTTY("")):
+        code, _ = run(base_args(configure=True, deprecated=["--configure"]))
     assert code is None
+
+
+def test_configure_flag_without_a_terminal_exits_config():
+    # a wizard nobody can answer must exit 3, never EOF-crash
+    code, text = run(base_args(configure=True, deprecated=["--configure"]))
+    assert code == int(ExitCode.CONFIG)
+    assert "needs an interactive terminal" in text
+
+
+def test_config_wizard_without_a_terminal_exits_config():
+    code, text = run(base_args(command="config"))
+    assert code == int(ExitCode.CONFIG)
+    assert "needs an interactive terminal" in text
 
 
 def test_interactive_flag_maps_to_chat_notice():
@@ -341,6 +364,78 @@ def test_deprecation_notices_never_land_on_stdout(capsys):
     runner.pipe.assert_called_once()
 
 
+# --- fresh-install behavior: no config, non-interactive stdin ----------------
+
+def run_real_settings(args, pipe=None, capsys_drain=False):
+    """
+    Runs main() with the runner/db/logs mocked but Settings REAL, so the
+    config-file handling is exercised for real. Returns (exit_code, stderr_text).
+    """
+    console = Console(record=True, width=250, stderr=True)
+    runner = mock.MagicMock()
+    with mock.patch("smah.logs.configure"), \
+            mock.patch("smah.args.extract_args", return_value=(args, pipe)), \
+            mock.patch("smah.smah.init_database"), \
+            mock.patch("smah.smah.Runner", return_value=runner), \
+            mock.patch("smah.smah.err_console", console):
+        code = None
+        try:
+            smah_main.main()
+        except SystemExit as e:
+            code = e.code
+    return code, console.export_text()
+
+
+def test_ask_with_missing_config_exits_three_not_internal_error(tmp_path, capsys):
+    capsys.readouterr()
+    missing = tmp_path / "config.yaml"
+    code, text = run_real_settings(
+        base_args(command="ask", ask_query="test", config=str(missing)), pipe="hi",
+    )
+    assert code == int(ExitCode.CONFIG)
+    assert "no config found at" in text and str(missing) in text
+    assert "Run 'smah config'" in text
+    assert "unexpected error" not in text
+    assert "EOF" not in text
+    # stdout is byte-empty when a command fails before producing real output
+    assert capsys.readouterr().out == ""
+
+
+def test_ask_with_incomplete_config_non_interactive_exits_three(tmp_path, capsys):
+    capsys.readouterr()
+    config = tmp_path / "config.yaml"
+    config.write_text(yaml.safe_dump({"vsn": "0.0.1"}))  # exists, but empty/incomplete
+    code, text = run_real_settings(
+        base_args(command="ask", ask_query="test", config=str(config)), pipe="hi",
+    )
+    assert code == int(ExitCode.CONFIG)
+    assert "incomplete" in text
+    assert "needs an interactive terminal" in text
+    assert capsys.readouterr().out == ""
+
+
+def test_wizard_ui_never_lands_on_stdout(tmp_path, capsys):
+    capsys.readouterr()
+    config = tmp_path / "config.yaml"
+    config.write_text(yaml.safe_dump({"vsn": "0.0.1"}))
+
+    from smah.console import std_console
+
+    def fake_configurator(settings):
+        print("WIZARD-PLAIN-PRINT")                      # plain stdout write
+        std_console.print("WIZARD-RICH-PANEL")           # rich stdout console
+        return settings
+
+    with mock.patch("sys.stdin", FakeTTY("")), \
+            mock.patch("smah.smah.configurator", side_effect=fake_configurator):
+        code, _ = run_real_settings(base_args(command="config", config=str(config)))
+    assert code is None
+    captured = capsys.readouterr()
+    assert captured.out == ""                              # stdout stays machine-clean
+    assert "WIZARD-PLAIN-PRINT" in captured.err
+    assert "WIZARD-RICH-PANEL" in captured.err
+
+
 # --- exit-code mapping --------------------------------------------------------
 
 def test_unexpected_error_exits_one_and_names_failure():
@@ -371,3 +466,41 @@ def test_openai_error_exits_provider():
     code, text = run(base_args(query="hello"), runner=runner)
     assert code == int(ExitCode.PROVIDER)
     assert "api exploded" in text
+
+
+# --- defect regression: doctor must not block on an open stdin pipe -----------
+
+def test_doctor_completes_with_stdin_held_open(tmp_path):
+    """
+    Reproduces the CI/daemon case: stdin is an open pipe nobody writes to.
+    doctor must complete without reading it.
+    """
+    import os
+    import subprocess
+    import sys as _sys
+
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env = dict(os.environ, PYTHONPATH=repo_root)
+    proc = subprocess.Popen(
+        [
+            _sys.executable, "-m", "smah.smah",
+            "-c", str(tmp_path / "missing-config.yaml"),
+            "--database", str(tmp_path / "smah.db"),
+            "doctor",
+        ],
+        stdin=subprocess.PIPE,  # held open for the child's lifetime
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=repo_root,
+        env=env,
+    )
+    try:
+        returncode = proc.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+        pytest.fail("smah doctor hung on an open stdin pipe (regression of defect 3)")
+    stdout, stderr = proc.communicate(timeout=10)
+    assert returncode == int(ExitCode.CONFIG)  # missing config, not a hang
+    assert stdout == b""                        # human report belongs to stderr
+    assert b"FAIL" in stderr

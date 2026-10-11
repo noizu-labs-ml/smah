@@ -35,6 +35,16 @@ Subcommand restructure per `docs/ux/interface-spec.md`:
   output of `history`, `models list`, `doctor --json`, `config show`/`path`);
   all notices, deprecations, and diagnostics go to stderr. Exit codes survive
   piping. Rich formatting follows TTY detection; `--rich/--no-rich` override.
+- Fresh-install hardening: `smah ask`/`resume` with no config file exit 3 with
+  an actionable message ("Run 'smah config'") instead of launching a wizard
+  that dies on EOF with an opaque internal error. The setup wizard only ever
+  runs on a real terminal with stdin free; explicit `smah config`/`--configure`
+  without a terminal exits 3 with "needs an interactive terminal".
+- The setup wizard's entire UI (panels, prompts) now goes to stderr — stdout
+  stays machine-consumable even mid-wizard.
+- Only `ask` (and the legacy/bare piped path) consumes stdin. `doctor`,
+  `models`, `history`, `config`, `resume`, and `chat` never read stdin, so an
+  inherited open pipe (CI, daemons) can no longer hang them.
 - Removed flags stay removed with honest messages (`--setup never existed`,
   etc.). New `--api-key` flag replaces `--openai-api-key` for the active
   provider.
