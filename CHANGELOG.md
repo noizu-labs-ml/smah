@@ -7,6 +7,7 @@ CHANGE LOG
 ### Unreleased
 October 18 2026
 
+- Rust workspace scaffold (M0): 4-crate cargo workspace (core/providers/tui/cli), ci-rs.yml, toolchain pinning.
 - Added `docs/PROJ-LAYOUT.md` (+ `docs/PROJ-LAYOUT.summary.md`): navigable
   project-tree map; marks generated (`_autosummary`), symlinked, and
   gitignored (`config/`, `.envrc.secret`/`.envrc.dev`) paths and the

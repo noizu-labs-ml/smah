@@ -1,0 +1,12 @@
+[package]
+name = "smah-tui"
+version = "0.0.0"
+description = "SMAH terminal UI: ratatui app, widgets, event loop, TTY-gated surfaces."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+smah-core = { path = "../smah-core" }
+smah-providers = { path = "../smah-providers" }
