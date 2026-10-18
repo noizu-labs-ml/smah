@@ -65,7 +65,8 @@ jobs:
       - name: Gate self-test (pattern must still catch execution primitives)
         run: |
           # Positive control: the amended pattern MUST match the canonical
-          # offender shapes, or the gate is silently weaker than intended.
+          # offender shapes (and each of its three terms), or the gate is
+          # silently weaker than intended. Never compiled — grep fixture only.
           cat > /tmp/offender.rs <<'EOF'
           use std::process::Command;
           fn main() {
@@ -73,6 +74,10 @@ jobs:
               let mut child = Command::new("ls").spawn().expect("spawn");
               child.wait().expect("wait");
           }
+          // each gate term must keep matching its own path token:
+          // process::Command — the import/type path
+          // process::spawn — the spawn-call path
+          let _term3 = process::spawn;
           EOF
           if ! grep -qE 'Command::new' /tmp/offender.rs || ! grep -qE 'process::Command' /tmp/offender.rs || ! grep -qE 'process::spawn' /tmp/offender.rs; then
             echo "::error::no-shell-gate pattern failed its self-test: an execution primitive escaped the match."
