@@ -1,0 +1,5 @@
+---
+source: crates/smah-core/tests/errors_spec.rs
+expression: error.render(LOG)
+---
+smah: can't read config at /home/tester/.smah/config.yaml: mapping values are not allowed in this context. Fix it, or move it aside and run 'smah config'. Full log: /home/tester/.smah/logs/smah.20260101_000000.log.

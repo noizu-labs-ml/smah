@@ -1,0 +1,21 @@
+vsn: 0.0.1
+user: null
+system: null
+inference:
+  vsn: 0.0.1
+  legacy_flag: carried-forward
+  providers:
+    openai:
+      name: OpenAI
+      description: OpenAI Models
+      enabled: true
+      settings:
+        api_key: literal-openai-key-do-not-log
+      models:
+      - name: gpt-4o
+        model: gpt-4o
+        enabled: false
+        vendor_note: internal-only
+      - name: gpt-4o-mini
+        model: gpt-4o-mini
+        enabled: true
