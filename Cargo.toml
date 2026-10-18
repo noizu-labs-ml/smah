@@ -18,6 +18,8 @@ ratatui = "0.30"
 crossterm = "0.29"
 # HTTP — rustls only; both provider clients are hand-rolled on top (plan §B)
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "stream"] }
+# Stream combinators for consuming reqwest's bytes_stream (SSE); std-only slice
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
 # Serialization — preserve_order + Value-centric YAML for Python-format parity
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
