@@ -13,12 +13,13 @@ RBAC/"SMAHRails" — **do not cite as mitigations; they don't exist.**
 · B3 model output ↔ parser/console/clipboard · B4 environment ↔ process ·
 B5 CI/CD ↔ PyPI · B6 model output ↔ virtual-tool file-surface executor + stdout
 gate (#17; print-only no longer fully separates model output from disk) ·
-B7 model-fabricated content ↔ loopback mock servers + browser page (#20/#19/#22/#21:
-loopback-only binds, escaped rendering, origin-checked regen/push,
-DTD-denying XML + descriptor-validated gRPC dispatch; Rust
+B7 model-fabricated content ↔ loopback mock servers + browser/clients (#20/#19/#22/#21/#23/#24/#25:
+loopback-only (or unix-socket) binds, escaped rendering, origin-checked regen/push,
+DTD-denying XML + descriptor-validated gRPC dispatch, stdio-default MCP transport,
+code-owned VFS containment; Rust
 drivers stay print-only — they write files, never execute).
 
-**Register (25)**: 14 mitigated · 5 partial · 3 open · 3 accepted.
+**Register (30)**: 18 mitigated · 6 partial · 3 open · 3 accepted.
 
 | ID | Sev | Item | Status |
 |----|-----|------|--------|
@@ -47,6 +48,11 @@ drivers stay print-only — they write files, never execute).
 | T-023 | Med | grpc proto parse DoS + streaming shapes outside unary-only dispatch (#21) | Mitigated |
 | T-024 | Med | soap/grpc contract poisoning (cached WSDL/proto served unvalidated) | Mitigated |
 | T-025 | Med | soap/grpc loopback emulator mistaken for a real service / exposed beyond host | Mitigated |
+| T-026 | Med | VFS escape: `..`/absolute/symlink smuggled out of the fabricated tree (#25) | Mitigated |
+| T-027 | Med | Fabricated MCP tool-catalog injection to downstream clients (#23) | Mitigated |
+| T-028 | Low | MCP transport exposure: listener reachable when believed private (#23) | Mitigated |
+| T-029 | Med | Real-vs-virtual confusion: fabricated DB mistaken for a real one (#24) | Partial |
+| T-030 | Low | Wire-level abuse of the db/vfs/mcp servers (oversize, statement bombs, write attempts) | Mitigated |
 
 **Key controls (verified)**: print-only test + CI grep gate (Rust gate
 amended to execution primitives only — `Command::new`/`process::Command`/
@@ -61,14 +67,19 @@ stderr disclosure, `html/template` + `textContent` rendering under CSP,
 loopback + same-origin gates on `/push` and `/regen`, sha-pinned
 validate-on-load caches, Go-service CI `os/exec` ban with positive-control
 self-test, soap DTD/entity-denying XML parsing with request caps, grpc
-bounded protox parse + unary-only descriptor-validated dispatch.
+bounded protox parse + unary-only descriptor-validated dispatch, mcp
+two-strikes bounded catalog fabrication + digest-keyed frozen
+`mcp-tools.json` + `--show-catalog`, vfs canonicalized containment
+(`..`/absolute/symlink refusal read+write) with code-owned fs tools,
+db PG-wire subset (writes `42501`, extended/multi-statement `0A000`,
+size caps `54000`, read-only store, one sequential connection).
 
 **Residual**: local attacker reads all plaintext stores (accepted — same-account
 attacker is game over); user pastes a suggested command (accepted trade-off);
 provider-side retention of sensitive pipes (user's choice); unsigned tool
 files + TOCTOU window on the virtual-tool file surface (T-010/T-012 — read
 tools before installing, try `--no-fs` first); loopback mocks are deliberately
-convincing fabricated data (T-017..T-025 — never point a decision-making
+convincing fabricated data (T-017..T-030 — never point a decision-making
 client at one).
 
 **Details**: [threats/attack-surface.md](threats/attack-surface.md) ·

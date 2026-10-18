@@ -1,42 +1,42 @@
 # Virtual tools — driver family
 
 A virtual tool is a markdown file (`name`, frontmatter, persona body) that
-behaves like a subcommand: `smah --emulate <tool> [args...]`. The **cli
-driver** (the only one implemented today) runs the tool by prompting the
-model with a file surface and directive protocol — see
-[virtual-tools-cli-driver.md](virtual-tools-cli-driver.md) for the full
-cli-driver contract.
+behaves like a subcommand: `smah --emulate <tool> [args...]`. Each tool
+file's `driver:` key picks one of the nine drivers below; all nine ship in
+this build. Wherever a driver listens on the network it binds loopback only
+and says so loudly on stderr (THREAT-MODEL boundary B7).
 
 This page is the family index: the driver taxonomy, how dispatch works,
-and where each driver's status lives.
+and where each driver's contract lives (one `virtual-tools-<driver>-driver`
+doc per driver).
 
 ## Driver taxonomy
 
 A tool file's `driver:` frontmatter key (optional, default `cli`) names the
-driver that executes it. The full set:
+driver that executes it. The full set — all **shipped**:
 
-| value | executes a tool as | status |
+| value | executes a tool as | contract |
 |---|---|---|
-| `cli` | a prompt-driven CLI tool over the file surface + directive protocol | **shipped** |
-| `tui` | an interactive terminal UI | not yet (refuses, exit 3) |
-| `web` | a local web app / HTTP endpoint | not yet (refuses, exit 3) |
-| `api` | a client for an external REST API | not yet (refuses, exit 3) |
-| `soap` | a SOAP/WSDL client | not yet (refuses, exit 3) |
-| `mcp` | a Model Context Protocol client | not yet (refuses, exit 3) |
-| `grpc` | a gRPC client | not yet (refuses, exit 3) |
-| `vfs` | a virtual filesystem mounted for the model | not yet (refuses, exit 3) |
-| `db` | a database query surface | not yet (refuses, exit 3) |
+| `cli` | a prompt-driven CLI tool over the file surface + directive protocol | [cli](virtual-tools-cli-driver.md) |
+| `tui` | an interactive terminal UI (ratatui session on TTYs; byte-parity cli line fallback; `@@smah ui` display verb) | [tui](virtual-tools-tui-driver.md) |
+| `web` | a local web page (model writes strings-only `content.json`; loopback-only Go companion renders it; refresh re-engages the model) | [web](virtual-tools-web-driver.md) |
+| `api` | a mock REST API (frozen OpenAPI 3 contract served byte-for-byte at `/openapi.json`; other requests answered by bounded fabrication) | [api](virtual-tools-api-driver.md) |
+| `soap` | a mock SOAP service (frozen WSDL served at `?wsdl`; DTD/entity-denying envelope handling) | [soap](virtual-tools-soap-driver.md) |
+| `mcp` | an MCP server (the smah process itself: frozen fabricated tool catalog over JSON-RPC 2.0 stdio, opt-in loopback TCP; standalone Elixir replay service in `services/mcp-vtool`) | [mcp](virtual-tools-mcp-driver.md) |
+| `grpc` | a mock gRPC server (proto-first: frozen `.proto` parsed into a descriptor pool, unary-only tonic dispatch) | [grpc](virtual-tools-grpc-driver.md) |
+| `vfs` | a virtual filesystem (fabricated tree materialized under the tool's cache dir; code-owned fs tools; canonicalized containment) | [vfs](virtual-tools-vfs-driver.md) |
+| `db` | a PostgreSQL-compatible query surface (`smah-virtual-postgres`: PG-wire subset over unix socket / loopback TCP; read-only fabricated store) | [db](virtual-tools-db-driver.md) |
 
 `"emulated"` — the original key value — is a **permanent alias of `cli`**;
 existing tool files keep working and the loader stores `cli`.
 
 An unknown driver makes the tool file invalid (typos must not silently
-change behavior). A known, not-yet-shipped driver **loads fine** — it
-appears in `smah tools list` with its driver column — and refuses to run:
+change behavior). A driver absent from a build (e.g. a feature-gated
+build) **loads fine** — it appears in `smah tools list` with its driver
+column — and refuses to run:
 
-    smah: virtual-tool driver 'tui' is not available in this build (not
-    implemented yet; the tui virtual tool ships in a later release). See
-    docs/ux/virtual-tools.md for the driver family.
+    smah: virtual-tool driver '<driver>' is not available in this build.
+    See docs/ux/virtual-tools.md for the driver family.
 
 Exit code 3 (`Config` class).
 
@@ -62,8 +62,9 @@ tool is allowed but inert.
 The seam is designed so a driver lane needs **no loader or dispatch
 edits**:
 
-1. Replace the stub `crates/smah-core/src/virtual_tools/drivers/<name>.rs`
-   (`run` refuses with `DriverUnavailable` today; keep the signature).
+1. Implement `crates/smah-core/src/virtual_tools/drivers/<name>.rs`
+   (the stub it replaces refused with `DriverUnavailable`; keep the
+   `run` signature).
 2. Extend the directive verb set with `Scanner::with_verbs(&[...])` —
    verbs outside the base set arrive as raw
    `Directive::Extension { verb, payload }` for the driver to interpret.
