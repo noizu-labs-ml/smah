@@ -8,6 +8,7 @@
 use smah_core::errors::SmahError;
 use smah_core::settings::Settings;
 
+use crate::alibaba::AlibabaProvider;
 use crate::anthropic::AnthropicProvider;
 use crate::credentials;
 use crate::openai::OpenAiProvider;
@@ -15,7 +16,7 @@ use crate::Provider;
 
 /// The provider keys SMAH knows how to run, sorted for stable messages.
 pub fn known_provider_keys() -> Vec<&'static str> {
-    vec!["anthropic", "openai"]
+    vec!["alibaba", "anthropic", "openai"]
 }
 
 /// Resolve a provider implementation by config key.
@@ -33,6 +34,11 @@ pub fn get_provider(
     cli_key: Option<&str>,
 ) -> Result<Box<dyn Provider>, SmahError> {
     match key {
+        // OpenAI-compatible: DashScope compatible-mode endpoint.
+        "alibaba" => {
+            let api_key = credentials::resolve_api_key(settings, key, cli_key)?;
+            Ok(Box::new(AlibabaProvider::new(api_key)?))
+        }
         "anthropic" => {
             let api_key = credentials::resolve_api_key(settings, key, cli_key)?;
             Ok(Box::new(AnthropicProvider::new(api_key)?))

@@ -1,8 +1,9 @@
 //! SMAH provider layer: the [`Provider`] trait, the config-key
-//! [registry](registry), hand-rolled Anthropic/OpenAI HTTP clients, and a
+//! [registry](registry), hand-rolled Anthropic/OpenAI HTTP clients (Alibaba
+//! DashScope rides the shared OpenAI-compatible core), and a
 //! hand-rolled [SSE parser](sse) for token streaming (rewrite plan §B/§G M2).
 //!
-//! No provider SDK crates: both clients are raw `reqwest` over rustls so the
+//! No provider SDK crates: the clients are raw `reqwest` over rustls so the
 //! request/response shapes and the error semantics are exactly SMAH's (plan
 //! §B — "no acceptable Anthropic crate exists; async-openai rejected for
 //! symmetry + exact error semantics").
@@ -15,15 +16,18 @@
 //! Print-only invariant: this crate is pure HTTP + std — it never touches
 //! any OS interface beyond sockets (CI gate `no-shell-gate`).
 
+pub mod alibaba;
 pub mod anthropic;
 pub mod credentials;
 pub mod openai;
+pub mod openai_compat;
 pub mod registry;
 pub mod sse;
 pub mod translate;
 
 use smah_core::SmahError;
 
+pub use alibaba::AlibabaProvider;
 pub use anthropic::AnthropicProvider;
 pub use openai::OpenAiProvider;
 pub use registry::{get_provider, known_provider_keys};

@@ -47,5 +47,34 @@ mod tests {
             providers.contains_key(Value::String("openai".to_string())),
             "openai must be in the defaults catalog"
         );
+        assert!(
+            providers.contains_key(Value::String("alibaba".to_string())),
+            "alibaba must be in the defaults catalog"
+        );
+        // The alibaba entry carries the qwen 3.8 flash model (virtual-tools
+        // e2e), enabled.
+        let alibaba_models = providers
+            .get(Value::String("alibaba".to_string()))
+            .and_then(|p| p.get(Value::String("models".to_string())))
+            .and_then(Value::as_sequence)
+            .expect("alibaba models list");
+        let qwen = alibaba_models
+            .iter()
+            .find(|m| {
+                m.get(Value::String("model".to_string()))
+                    .and_then(Value::as_str)
+                    == Some("qwen3.8-flash")
+            })
+            .expect("qwen3.8-flash model entry");
+        assert_eq!(
+            qwen.get(Value::String("name".to_string()))
+                .and_then(Value::as_str),
+            Some("Qwen 3.8 Flash")
+        );
+        assert_eq!(
+            qwen.get(Value::String("enabled".to_string()))
+                .and_then(Value::as_bool),
+            Some(true)
+        );
     }
 }
