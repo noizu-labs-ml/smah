@@ -1,0 +1,23 @@
+[package]
+name = "smah-vtool-http"
+version = "0.0.0"
+description = "SMAH virtual-tools HTTP plumbing: loopback axum host, OpenAPI contract validation, interruptible waits."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# Leaf plumbing crate for the virtual-tools api (#20) and web (#19) drivers:
+# the frozen `--emulate` dispatch reaches both through smah-core, so the
+# dependency direction is core -> this crate. No smah-core types here — the
+# driver hands in closures and plain strings.
+[dependencies]
+axum = { workspace = true }
+tokio = { workspace = true, features = ["signal", "macros"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+# tool.sha256 staleness markers (pins.rs) shared by the api/web drivers
+sha2 = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

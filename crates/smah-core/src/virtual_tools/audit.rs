@@ -43,6 +43,8 @@ pub struct AuditRecord {
 }
 
 /// The open audit sink for one run.
+/// Clone: cheap handle copy — every clone appends to the same file.
+#[derive(Clone)]
 pub struct Audit {
     path: PathBuf,
     disabled_reason: Option<String>,
