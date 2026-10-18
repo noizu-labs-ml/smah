@@ -21,6 +21,7 @@ is the authoritative control inventory.
 - **B4** environment ↔ process (env vars incl. SDK base-URL overrides, direnv)
 - **B5** CI/CD ↔ PyPI (release path)
 - **B6** model output (untrusted) ↔ virtual-tool driver file-surface executor + stdout gate (CLI driver only; the print-only invariant no longer fully separates model output from disk)
+- **B7** local peers ↔ virtual-tool server lanes (`mcp`/`db`/`vfs`, `services/mcp-vtool`): loopback-only TCP binds and user-state unix sockets are reachable by any process running as the same user — same trust class as reading `~/.cache`; never a routable interface, never authenticated (nothing to authenticate on loopback)
 
 ## Attack Surface
 
@@ -60,9 +61,15 @@ the PyPI package plus GitHub Actions release via Trusted Publishing.
 | T-014 | Low | Spoofing / Tampering | Hook snippet injection: crafted tool/file names injecting shell into `smah hooks zsh` output or shim files | Mitigated (name regex + reserved set; unquoted-but-validated emission; golden snapshots) |
 | T-015 | Info | Repudiation / Info disclosure | Audit log tamper; secrets leaking via logged paths/args; args+stdin egress to provider (inherent, cf. T-008) | Partial (metadata-only JSONL, contents never logged, 0700/0600, user-owned dir; no tamper-proofing v1) |
 | T-016 | Low | DoS / cost | Unbounded stdin, endless directive loops, oversized writes → token/disk spend (T-009's analog for virtual tools) | Mitigated (loud truncation cap, `TURNS_MAX=8`, per-directive + aggregate write caps) |
+| T-026 | Medium | Elevation (B6/B7) | VFS escape: fabricated tree contents or a client fs-tool call smuggling `..`/absolute/symlink paths out of `~/.cache/smah/virtual-tools/<tool>/vfs/root/` | Mitigated (code-owned fs catalog — never fabricated; canonicalized ancestor containment, `..`/absolute refusal, final-component symlink refusal on read+write; fabrication-spec escape = DirectiveViolation abort exit 3, client escape = per-request refusal, audited `denied`, server keeps serving) |
+| T-027 | Medium | Tampering / Spoofing | Fabricated MCP tool-catalog injection: a hostile tool file fabricates a catalog that misrepresents tools (e.g. destructive-sounding names) to downstream MCP clients | Mitigated (one bounded fabrication turn + strict validation caps — 64 tools, name ≤64, description ≤1 KiB, schema ≤16 KiB, catalog ≤256 KiB; two invalid catalogs abort exit 5; catalog frozen to `mcp-tools.json` keyed by the tool-file digest `mcp.sha256` — edits re-fabricate, never serve stale; `--show-catalog` / `--no-serve` review path; catalog is inert data — no execution path) |
+| T-028 | Low | Info disclosure / Elevation (B7) | MCP transport exposure confusion: a user believes the JSON-RPC surface is private but a listener is reachable, or a routable bind is added later | Mitigated (batch stdio is the default — no listener at all; TCP is opt-in `--tcp-port`, binds `127.0.0.1` only with a loud disclosure line naming the port, bind failure is an error not a fallback; one sequential connection at a time; standalone `services/mcp-vtool` replays frozen artifacts loopback-only, never fabricates) |
+| T-029 | Medium | Spoofing / Repudiation | Real-vs-virtual confusion: a fabricated database is mistaken for a real one (results quoted as ground truth, production tooling pointed at the endpoint) | Partial (session branded `smah-virtual-postgres … FABRICATED DATA` in ParameterStatus, loud bind disclosure, `--no-serve`/`--show-schema` review path, driver docs, metadata-only audit of served statements; brand exists only on the wire — a client that ignores server_version still sees normal rows) |
+| T-030 | Low | DoS / Elevation (B7) | Wire-level abuse of the db/vfs/mcp servers: oversized frames, statement bombs, write attempts, connection floods | Mitigated (PG-wire subset refuses writes `42501`, extended protocol + multi-statement `0A000`, unknown `08P01`; message cap 256 KiB → `54000`, statement text ≤64 KiB; stores opened read-only, fs writes capped 64 KiB/1 MiB total/200 files; one sequential connection at a time; fabrication two-strikes → exit 5; audit records kind + decision only — statement text and contents never logged) |
 
-**Coverage:** 5 mitigated · 5 partial · 3 open · 3 accepted (16 items —
-T-001…T-016). Open items have no tracker tickets yet — file issues before
+**Coverage:** 30 items — T-001…T-030 (wave 3, T-026…T-030: 4 mitigated ·
+1 partial; full per-status counts reconcile once the wave-2 rows T-017…T-025
+land). Open items have no tracker tickets yet — file issues before
 fixing (T-001 first).
 
 → *Control details: [threats/data-stores.md](threats/data-stores.md) · [threats/supply-chain.md](threats/supply-chain.md)*
@@ -93,6 +100,17 @@ fixing (T-001 first).
   (`Command::new` / `process::Command` / `process::spawn` — termination-only
   `exit`/`ExitCode` allowed at the binary edge).
 
+- **Virtual-tool server lanes (B7, #23/#24/#25)**: the mcp/db/vfs drivers are
+  print-only servers — no child processes (the Rust no-shell gate covers
+  `drivers/{mcp,db,vfs}*.rs`); listeners are loopback-only TCP or a
+  user-state unix socket, loudly disclosed, one sequential connection at a
+  time; the vfs fs-tool catalog is code-owned and every path passes
+  canonicalized containment (T-026); the MCP catalog is validated, capped,
+  and frozen against the tool-file digest (T-027); the db store is
+  fabricated-once, opened read-only, and refused non-SELECT statements on the
+  wire with a `FABRICATED DATA` session brand (T-029/T-030); server operations
+  are audited metadata-only.
+
 ## Residual Risk
 
 - **Local attacker / compromised host**: plaintext `config.yaml`, `smah.db`,
@@ -111,6 +129,13 @@ fixing (T-001 first).
   TOCTOU window is accepted for v1 (future: Linux `openat2 RESOLVE_BENEATH`).
   Install only tools you have read; run new tools once with `--no-fs` and
   watch the audit log.
+- **Virtual servers (B7, T-026..T-030)**: loopback listeners have no auth —
+  any same-user process may connect, and fabricated catalogs/schemas/trees are
+  still model output that a hostile tool file can aim; the fabrication-spec
+  TOCTOU story matches B6, and the db session brand only helps clients that
+  read it (T-029 residual). Review tool files before running them;
+  `--show-catalog` / `--show-schema` / `--show-tree` and `--no-serve` exist
+  for exactly that.
 
 ## Grounding
 
