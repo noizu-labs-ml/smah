@@ -28,7 +28,13 @@ prost = { workspace = true }
 prost-reflect = { workspace = true, features = ["serde"] }
 protox = { workspace = true }
 quick-xml = "0.38"
-# Contract-freeze sha pins (shared with the #17 transcript cache at the root).
+# The virtual-tools driver family presents through these leaf crates (the
+# frozen `--emulate` dispatch reaches tui/web/api via smah-core, so the
+# dependency direction is core -> presentation; see each crate's Cargo.toml).
+smah-tui = { path = "../smah-tui" }
+smah-vtool-http = { path = "../smah-vtool-http" }
+# Contract-freeze sha pins (shared with the #17 transcript cache at the root);
+# tool.sha256 staleness markers for the virtual-tools contract caches (#20/#19).
 sha2 = { workspace = true }
 
 [dev-dependencies]
@@ -40,3 +46,6 @@ reqwest = { workspace = true }
 # Integration tests drive the grpc driver with a tonic client; the path
 # argument is an `http::uri::PathAndQuery` (same 1.x crate tonic uses).
 http = "1"
+# Real-model e2e tests only (env-gated, `#[ignore]`, never in CI):
+# builds an AlibabaProvider backend without runtime coupling.
+smah-providers = { path = "../smah-providers" }
