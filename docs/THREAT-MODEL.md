@@ -3,12 +3,13 @@
 ## Overview
 
 SMAH is a **local-only, print-only CLI**: no daemon, no server, no inbound
-network surface. Its crown jewels are (1) provider **API keys** (spend
-authority on Anthropic/OpenAI), (2) **session history + operator/system
-profile** in `~/.smah/smah.db`, and (3) the **host itself** — which the
-print-only invariant protects from model output. The only external boundary
-is egress to LLM provider APIs; the only untrusted *data* inputs are piped
-stdin and model responses.
+network surface beyond explicitly user-started **loopback-only mock servers**
+(B7: the api/web virtual-tool drivers). Its crown jewels are (1) provider
+**API keys** (spend authority on Anthropic/OpenAI), (2) **session history +
+operator/system profile** in `~/.smah/smah.db`, and (3) the **host itself** —
+which the print-only invariant protects from model output. The only external
+boundary is egress to LLM provider APIs; the only untrusted *data* inputs are
+piped stdin and model responses.
 
 ⚠ `docs/source/architecture.md` (stale draft) claims RBAC and "SMAHRails"
 guardrails — **neither exists**. Never cite them as mitigations; this file
@@ -21,6 +22,7 @@ is the authoritative control inventory.
 - **B4** environment ↔ process (env vars incl. SDK base-URL overrides, direnv)
 - **B5** CI/CD ↔ PyPI (release path)
 - **B6** model output (untrusted) ↔ virtual-tool driver file-surface executor + stdout gate (CLI driver only; the print-only invariant no longer fully separates model output from disk)
+- **B7** model-fabricated content ↔ loopback mock servers + browser page (api/web drivers #20/#19: loopback-only binds, escaped rendering, origin-checked regen/push channels; the Rust drivers themselves stay print-only — they write files, never execute)
 
 ## Attack Surface
 
@@ -60,9 +62,14 @@ the PyPI package plus GitHub Actions release via Trusted Publishing.
 | T-014 | Low | Spoofing / Tampering | Hook snippet injection: crafted tool/file names injecting shell into `smah hooks zsh` output or shim files | Mitigated (name regex + reserved set; unquoted-but-validated emission; golden snapshots) |
 | T-015 | Info | Repudiation / Info disclosure | Audit log tamper; secrets leaking via logged paths/args; args+stdin egress to provider (inherent, cf. T-008) | Partial (metadata-only JSONL, contents never logged, 0700/0600, user-owned dir; no tamper-proofing v1) |
 | T-016 | Low | DoS / cost | Unbounded stdin, endless directive loops, oversized writes → token/disk spend (T-009's analog for virtual tools) | Mitigated (loud truncation cap, `TURNS_MAX=8`, per-directive + aggregate write caps) |
+| T-017 | Medium | Tampering / Spoofing | TUI chrome injection (#18): fabricated content or a `@@smah ui` payload alters terminal UI chrome or emits control sequences that impersonate the host UI | Mitigated (rendered through a sanitizing sink — content is text, never chrome; `ui` payloads are schema-validated display data, invalid ⇒ soft `[ERROR ui …]` result; non-TTY fallback is byte-parity with the cli driver) |
+| T-018 | Medium | Tampering / DoS (cost) | API-driver fabricated-response abuse (#20): a runaway fabrication turn streams unbounded/garbage data to a client, or response/status shapes drift from HTTP | Mitigated (frozen-contract summary bound, strict `{"status": 200-599, "body": JSON}` shape with 1 retry then fixed `500`, 64 KiB fabrication cap, 256 KiB request cap (`413`), 8-entry ledger with 512 B digests) |
+| T-019 | **High** | Tampering (XSS) / Elevation | Web-driver page injection (#19): model-fabricated strings execute as markup/script in the browser, or a cross-origin page drives `/regen` (model-turn spend) or reads `/content.json` | Mitigated (server `html/template` auto-escaping + client `textContent` only, never `innerHTML`; restrictive CSP; `/push` + `/regen` gated on loopback RemoteAddr **and** same-origin; `/regen` POST-only → 403 otherwise; content validated strings-only with key/value/total caps before write) |
+| T-020 | Medium | Info disclosure | Loopback mock server exposed beyond the host (#20/#19): accidental non-loopback bind publishes fabricated-but-convincing data to the LAN | Mitigated (bind address is validated — non-loopback or bare-`:` hosts **refuse to start**; bind + URL disclosed loudly on stderr; `--no-serve` / `--no-watch` exist for no-listen runs; Rust drivers themselves bind nothing) |
+| T-021 | Medium | Tampering | Driver cache poisoning (#20/#19): a hostile or corrupted `openapi.json` / `content.json` in the cache dir is served or rendered without scrutiny on later runs | Mitigated (validate-then-freeze: only validated bodies are written; sha256 marker pins each cache to the tool file — tool edits invalidate silently-by-design; marker-current but invalid bodies are rejected loudly and regenerated; atomic writes; size caps) |
 
-**Coverage:** 5 mitigated · 5 partial · 3 open · 3 accepted (16 items —
-T-001…T-016). Open items have no tracker tickets yet — file issues before
+**Coverage:** 10 mitigated · 5 partial · 3 open · 3 accepted (21 items —
+T-001…T-021). Open items have no tracker tickets yet — file issues before
 fixing (T-001 first).
 
 → *Control details: [threats/data-stores.md](threats/data-stores.md) · [threats/supply-chain.md](threats/supply-chain.md)*
@@ -92,6 +99,15 @@ fixing (T-001 first).
   switch; amended Rust `no-shell-gate` still bans every execution primitive
   (`Command::new` / `process::Command` / `process::spawn` — termination-only
   `exit`/`ExitCode` allowed at the binary edge).
+- **Virtual-tool loopback servers + caches (B7, #18/#19/#20)**: the Rust
+  drivers stay print-only — they fabricate files, never execute; the api
+  driver's axum host and the Go `web-vtool` service validate their bind
+  address (loopback or refuse to start) and disclose it on stderr; rendered
+  content passes `html/template` + `textContent` under a restrictive CSP;
+  `/push` and `/regen` are loopback + same-origin gated; contract/content
+  caches are sha-pinned to the tool file and re-validated on every load;
+  the Go service is gated by a CI `os/exec` ban (positive-control
+  self-test), mirroring the Rust `no-shell-gate`.
 
 ## Residual Risk
 
@@ -111,6 +127,15 @@ fixing (T-001 first).
   TOCTOU window is accepted for v1 (future: Linux `openat2 RESOLVE_BENEATH`).
   Install only tools you have read; run new tools once with `--no-fs` and
   watch the audit log.
+- **Loopback mock servers (B7, T-017..T-021)**: fabricated data is
+  deliberately convincing — a user (or an agent pointed at one) can mistake
+  a mock for a real service; the escape hatches are procedural, not
+  technical (mocks bind loopback only, say so on stderr, and invent nothing
+  with real-world authority). Tool files remain unsigned, so a hostile
+  `interface:` can ask the model to fabricate misleading content; the
+  technical containment (loopback binds, escaped rendering, capped
+  channels, validated caches) bounds the blast radius to the user's own
+  browser and disk.
 
 ## Grounding
 
