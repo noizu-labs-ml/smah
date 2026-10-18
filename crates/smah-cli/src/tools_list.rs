@@ -29,9 +29,14 @@ fn list(json: bool) -> i32 {
         let rows = tools
             .iter()
             .map(|t| tool_row(t, "valid", String::new()))
-            .chain(invalid.iter().map(
-                |b| serde_json::json!({ "name": b.name, "status": "invalid", "reason": b.reason }),
-            ))
+            .chain(invalid.iter().map(|b| {
+                serde_json::json!({
+                    "name": b.name,
+                    "status": "invalid",
+                    "driver": serde_json::Value::Null,
+                    "reason": b.reason
+                })
+            }))
             .collect::<Vec<_>>();
         println!(
             "{}",
@@ -48,12 +53,21 @@ fn list(json: bool) -> i32 {
         return 0;
     }
 
-    println!("{:<20} {:<10} DESCRIPTION", "NAME", "STATUS");
+    println!(
+        "{:<20} {:<10} {:<8} DESCRIPTION",
+        "NAME", "STATUS", "DRIVER"
+    );
     for tool in &tools {
-        println!("{:<20} {:<10} {}", tool.name, "valid", tool.description);
+        println!(
+            "{:<20} {:<10} {:<8} {}",
+            tool.name, "valid", tool.driver, tool.description
+        );
     }
     for bad in &invalid {
-        println!("{:<20} {:<10} {}", bad.name, "invalid", bad.reason);
+        println!(
+            "{:<20} {:<10} {:<8} {}",
+            bad.name, "invalid", "-", bad.reason
+        );
     }
     0
 }
@@ -63,6 +77,7 @@ fn tool_row(tool: &ToolDef, status: &str, reason: String) -> serde_json::Value {
         "name": tool.name,
         "description": tool.description,
         "model": tool.model,
+        "driver": tool.driver,
         "allow_roots": tool.allow_roots,
         "status": status,
         "reason": reason,

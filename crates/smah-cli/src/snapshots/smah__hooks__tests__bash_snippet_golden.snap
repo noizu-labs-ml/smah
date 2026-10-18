@@ -3,5 +3,5 @@ source: crates/smah-cli/src/hooks.rs
 expression: "shell_snippet(\"bash\", &fixture_tools(), STAMP)"
 ---
 # smah virtual tools — generated 2026-10-18T00:00:00-07:00 (2 tools)
-smah.commit-msg() { smah --emulate-cli commit-msg "$@"; }
-smah.log-analyzer() { smah --emulate-cli log-analyzer "$@"; }
+smah.commit-msg() { smah --emulate commit-msg "$@"; }
+smah.log-analyzer() { smah --emulate log-analyzer "$@"; }

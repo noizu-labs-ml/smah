@@ -44,8 +44,10 @@ pub fn shell_snippet(shell: &str, tools: &[ToolDef], generated_at: &str) -> Stri
     for tool in tools {
         // Tool names are regex-validated + reserved-set-checked at load:
         // lowercase letters/digits/'-'/'_' only, no shell metacharacters.
+        // --emulate (not --emulate-cli): dispatch follows each tool file's
+        // `driver:` field.
         out.push_str(&format!(
-            "smah.{}() {{ smah --emulate-cli {} \"$@\"; }}\n",
+            "smah.{}() {{ smah --emulate {} \"$@\"; }}\n",
             tool.name, tool.name
         ));
     }
@@ -117,7 +119,7 @@ fn write_shims(dir: Option<&Path>) -> i32 {
     let mut written = 0usize;
     for tool in &tools {
         let path = bin.join(format!("smah.{}", tool.name));
-        let script = format!("#!/bin/sh\nexec smah --emulate-cli {} \"$@\"\n", tool.name);
+        let script = format!("#!/bin/sh\nexec smah --emulate {} \"$@\"\n", tool.name);
         match std::fs::write(&path, script).and_then(|()| set_executable(&path)) {
             Ok(()) => written += 1,
             Err(err) => {

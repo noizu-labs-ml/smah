@@ -6,7 +6,7 @@
 //! Argument hazard rule: everything after `<tool>` belongs to the tool —
 //! hyphen-leading values included — so `smah --emulate-cli edit --version`
 //! passes `--version` through to the tool prompt and never prints clap's
-//! help/version. Global smah flags must precede `--emulate-cli`.
+//! help/version. Global smah flags must precede the emulate flag.
 
 use std::path::PathBuf;
 
@@ -34,9 +34,19 @@ pub struct Cli {
     #[arg(short = 'v', action = clap::ArgAction::Count)]
     pub verbose: u8,
 
-    /// Run an installed virtual tool: `smah --emulate-cli <tool> [args...]`.
+    /// Run an installed virtual tool through the emulated-CLI driver:
+    /// `smah --emulate-cli <tool> [args...]`. Kept forever as the forced-cli
+    /// compat form.
     #[arg(long, value_name = "TOOL")]
     pub emulate_cli: Option<String>,
+
+    /// Run an installed virtual tool, dispatching on the tool file's
+    /// `driver:` field: `smah --emulate <tool> [args...]`. A `driver: cli`
+    /// or `emulated` tool takes the emulated-CLI path (identical to
+    /// `--emulate-cli`); other drivers resolve to their own driver
+    /// implementations.
+    #[arg(long, value_name = "TOOL")]
+    pub emulate: Option<String>,
 
     /// Disable the file surface for this run (all directives become soft
     /// refusals back to the model).
@@ -54,7 +64,7 @@ pub struct Cli {
 
     /// Unused on the emulate path (see [`split_emulate_tail`]): clap's own
     /// `--version`/`--help` actions fire before a trailing positional can
-    /// start when `<tool>` was consumed as the `--emulate-cli` value, so the
+    /// start when `<tool>` was consumed as an emulate-flag value, so the
     /// plan's documented fallback splits argv manually after `<tool>`. Kept
     /// for M5's plain-positional forms.
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -62,28 +72,32 @@ pub struct Cli {
 }
 
 /// The argv split that guarantees the tool-data tail (plan risk-2 fallback,
-/// same observable contract as `trailing_var_arg`): find the first
-/// `--emulate-cli` occurrence; everything **after** its value is tool data —
-/// hyphens included, `--version`/`--help` never intercepted. Global flags
-/// (before `--emulate-cli`) go through clap normally, so clap still owns
-/// `-c`, `--model`, `-v`, its own `--version`, and usage errors (exit 2).
+/// same observable contract as `trailing_var_arg`): find the first emulate
+/// flag — `--emulate-cli` or `--emulate` (inline `=` forms included) — and
+/// treat everything **after** its value as tool data — hyphens included, so
+/// `--version`/`--help` are never intercepted. Global flags (before the
+/// emulate flag) go through clap normally, so clap still owns `-c`,
+/// `--model`, `-v`, its own `--version`, and usage errors (exit 2).
 ///
-/// Returns `None` when no `--emulate-cli` is present (subcommand / bare
-/// paths parse the whole argv through clap).
+/// Returns `None` when neither flag is present (subcommand / bare paths
+/// parse the whole argv through clap).
 pub fn split_emulate_tail() -> Option<(Cli, String, Vec<String>)> {
     let argv: Vec<String> = std::env::args().collect();
     for (idx, arg) in argv.iter().enumerate() {
-        if let Some(inline) = arg.strip_prefix("--emulate-cli=") {
-            let head: Vec<String> = argv[..=idx].to_vec();
-            let tail: Vec<String> = argv[idx + 1..].to_vec();
-            return Some((Cli::parse_from(head), inline.to_string(), tail));
-        }
-        if arg == "--emulate-cli" {
-            let tool = argv.get(idx + 1)?.clone();
-            let mut head: Vec<String> = argv[..=idx].to_vec();
-            head.push(tool.clone());
-            let tail: Vec<String> = argv[idx + 2..].to_vec();
-            return Some((Cli::parse_from(head), tool, tail));
+        for flag in ["--emulate-cli", "--emulate"] {
+            let inline = format!("{flag}=");
+            if let Some(tool) = arg.strip_prefix(inline.as_str()) {
+                let head: Vec<String> = argv[..=idx].to_vec();
+                let tail: Vec<String> = argv[idx + 1..].to_vec();
+                return Some((Cli::parse_from(head), tool.to_string(), tail));
+            }
+            if arg == flag {
+                let tool = argv.get(idx + 1)?.clone();
+                let mut head: Vec<String> = argv[..=idx].to_vec();
+                head.push(tool.clone());
+                let tail: Vec<String> = argv[idx + 2..].to_vec();
+                return Some((Cli::parse_from(head), tool, tail));
+            }
         }
     }
     None
