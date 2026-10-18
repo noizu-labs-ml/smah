@@ -17,7 +17,23 @@ tracing-subscriber = { workspace = true }
 home = { workspace = true }
 # Local-time log-file names (`smah.<YYYYmmdd_HHMMSS>.log`)
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# Virtual-tools wave-2 drivers (soap #22, grpc #21): loopback servers +
+# interface-first contracts. The big versions are pre-added at the workspace
+# root (lanes never edit that file); `tonic-reflection`/`quick-xml` are
+# crate-local and wave-2-owned lines.
+tokio = { workspace = true, features = ["signal"] }
+axum = { workspace = true }
+tonic = { workspace = true }
+prost = { workspace = true }
+prost-reflect = { workspace = true, features = ["serde"] }
+protox = { workspace = true }
+quick-xml = "0.38"
+# Contract-freeze sha pins (shared with the #17 transcript cache at the root).
+sha2 = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }
 tempfile = { workspace = true }
+# Env-gated real-qwen e2e (`#[ignore]`, never in CI): a tiny test-only
+# OpenAI-compatible chat client against ALIBABA_BASE_URL.
+reqwest = { workspace = true }
