@@ -22,7 +22,7 @@ is the authoritative control inventory.
 - **B4** environment ↔ process (env vars incl. SDK base-URL overrides, direnv)
 - **B5** CI/CD ↔ PyPI (release path)
 - **B6** model output (untrusted) ↔ virtual-tool driver file-surface executor + stdout gate (CLI driver only; the print-only invariant no longer fully separates model output from disk)
-- **B7** model-fabricated content ↔ loopback mock servers + browser page (api/web drivers #20/#19: loopback-only binds, escaped rendering, origin-checked regen/push channels; the Rust drivers themselves stay print-only — they write files, never execute)
+- **B7** model-fabricated content ↔ loopback mock servers + browser page (api/web/soap/grpc drivers #20/#19/#22/#21: loopback-only binds, escaped rendering, origin-checked regen/push channels, DTD-denying XML + descriptor-validated gRPC dispatch; the Rust drivers themselves stay print-only — they write files, never execute)
 
 ## Attack Surface
 
@@ -67,9 +67,13 @@ the PyPI package plus GitHub Actions release via Trusted Publishing.
 | T-019 | **High** | Tampering (XSS) / Elevation | Web-driver page injection (#19): model-fabricated strings execute as markup/script in the browser, or a cross-origin page drives `/regen` (model-turn spend) or reads `/content.json` | Mitigated (server `html/template` auto-escaping + client `textContent` only, never `innerHTML`; restrictive CSP; `/push` + `/regen` gated on loopback RemoteAddr **and** same-origin; `/regen` POST-only → 403 otherwise; content validated strings-only with key/value/total caps before write) |
 | T-020 | Medium | Info disclosure | Loopback mock server exposed beyond the host (#20/#19): accidental non-loopback bind publishes fabricated-but-convincing data to the LAN | Mitigated (bind address is validated — non-loopback or bare-`:` hosts **refuse to start**; bind + URL disclosed loudly on stderr; `--no-serve` / `--no-watch` exist for no-listen runs; Rust drivers themselves bind nothing) |
 | T-021 | Medium | Tampering | Driver cache poisoning (#20/#19): a hostile or corrupted `openapi.json` / `content.json` in the cache dir is served or rendered without scrutiny on later runs | Mitigated (validate-then-freeze: only validated bodies are written; sha256 marker pins each cache to the tool file — tool edits invalidate silently-by-design; marker-current but invalid bodies are rejected loudly and regenerated; atomic writes; size caps) |
+| T-022 | Medium | DoS / Info disclosure | SOAP XML abuse (#22): a crafted request weaponizes DTD entity expansion (billion laughs) or XXE external-entity fetches against the driver's XML handling, or oversizes/deepens envelopes to exhaust the parse budget | Mitigated (requests are parsed by a DTD- and entity-denying scanner — `DOCTYPE`/`ENTITY` declarations are rejected with a `soap:Fault` before any expansion or fetch can happen; hard caps on request bytes and fabricable response size; fabricated bodies are re-validated against the frozen WSDL contract before serving) |
+| T-023 | Medium | DoS (cost) / Tampering | grpc-driver proto abuse (#21): a huge or deeply nested `interface:` proto exhausts the parse budget at load, or a client drives streaming/RPC shapes the emulator never validated | Mitigated (bounded protox parse with size caps on inline/path contracts; unary-only dispatch surface — streaming methods are refused with grpc-status 12 before any fabrication; responses re-validated against the declared message descriptor and size-capped after fabrication) |
+| T-024 | Medium | Tampering | Contract poisoning, soap/grpc (#22/#21): a hostile or corrupted cached WSDL/proto is served or dispatched against without scrutiny on later runs | Mitigated (same validate-then-freeze pattern as #20: only validated contracts are cached; `contract.sha256` integrity + `tool.sha256` staleness markers; validate-on-load — marker-current but invalid contracts are rejected loudly and re-frozen; atomic writes; no model-generated contracts — `interface:` is author-supplied) |
+| T-025 | Medium | Spoofing / Info disclosure | soap/grpc mock exposure (#22/#21): a loopback emulator is mistaken for a real service, or bound beyond the host | Mitigated (loopback-only binds by construction — `--port` accepts a port, never a host; bind address disclosed loudly on stderr; `--no-serve` for no-listen runs; fabrication answers are schema-validated against the declared contract, so the mock cannot drift outside its published schema) |
 
-**Coverage:** 10 mitigated · 5 partial · 3 open · 3 accepted (21 items —
-T-001…T-021). Open items have no tracker tickets yet — file issues before
+**Coverage:** 14 mitigated · 5 partial · 3 open · 3 accepted (25 items —
+T-001…T-025). Open items have no tracker tickets yet — file issues before
 fixing (T-001 first).
 
 → *Control details: [threats/data-stores.md](threats/data-stores.md) · [threats/supply-chain.md](threats/supply-chain.md)*
@@ -99,10 +103,12 @@ fixing (T-001 first).
   switch; amended Rust `no-shell-gate` still bans every execution primitive
   (`Command::new` / `process::Command` / `process::spawn` — termination-only
   `exit`/`ExitCode` allowed at the binary edge).
-- **Virtual-tool loopback servers + caches (B7, #18/#19/#20)**: the Rust
+- **Virtual-tool loopback servers + caches (B7, #18/#19/#20/#21/#22)**: the Rust
   drivers stay print-only — they fabricate files, never execute; the api
   driver's axum host and the Go `web-vtool` service validate their bind
-  address (loopback or refuse to start) and disclose it on stderr; rendered
+  address (loopback or refuse to start) and disclose it on stderr; the soap
+  and grpc drivers bind loopback only — `--port` accepts a port, never a
+  host; rendered
   content passes `html/template` + `textContent` under a restrictive CSP;
   `/push` and `/regen` are loopback + same-origin gated; contract/content
   caches are sha-pinned to the tool file and re-validated on every load;
@@ -127,7 +133,7 @@ fixing (T-001 first).
   TOCTOU window is accepted for v1 (future: Linux `openat2 RESOLVE_BENEATH`).
   Install only tools you have read; run new tools once with `--no-fs` and
   watch the audit log.
-- **Loopback mock servers (B7, T-017..T-021)**: fabricated data is
+- **Loopback mock servers (B7, T-017..T-025)**: fabricated data is
   deliberately convincing — a user (or an agent pointed at one) can mistake
   a mock for a real service; the escape hatches are procedural, not
   technical (mocks bind loopback only, say so on stderr, and invent nothing
