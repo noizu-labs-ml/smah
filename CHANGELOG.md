@@ -4,6 +4,26 @@ CHANGE LOG
 
 ## Changes
 
+### Unreleased
+October 18 2026
+
+- Rust workspace scaffold (M0): 4-crate cargo workspace (core/providers/tui/cli), ci-rs.yml, toolchain pinning.
+- Added `docs/PROJ-LAYOUT.md` (+ `docs/PROJ-LAYOUT.summary.md`): navigable
+  project-tree map; marks generated (`_autosummary`), symlinked, and
+  gitignored (`config/`, `.envrc.secret`/`.envrc.dev`) paths and the
+  print-only safety invariant.
+- Added `docs/PROJ-ARCH.md` (+ `.summary.md`, `arch/data-flow.md`):
+  architecture overview of the plan→answer pipeline, provider seam, safety
+  model, stdout/stderr contract, and exit codes. Supersedes the stale
+  aspirational `docs/source/architecture.md` draft (recorded as a known
+  gap), and records the stale OpenAI-only `doctor.__check_provider` bug.
+- Added `docs/THREAT-MODEL.md` (+ `.summary.md`, `threats/{attack-surface,
+  data-stores,supply-chain}.md`): STRIDE register (9 items, stable T-IDs)
+  over the print-only CLI's boundaries. Verified in code — highest finding:
+  T-001 (High) provider API key written plaintext to the DEBUG log via
+  `Settings.log()` save-mode dump on every ask; also clipboard auto-copy
+  without prompt (T-003) and tag-pinned CI actions (T-007).
+
 ### 0.2.1
 October 11 2026
 

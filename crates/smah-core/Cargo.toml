@@ -1,0 +1,12 @@
+[package]
+name = "smah-core"
+version = "0.0.0"
+description = "SMAH domain core: settings, runner, parser, db, console, checks — UI-agnostic."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
