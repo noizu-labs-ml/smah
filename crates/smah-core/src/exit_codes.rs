@@ -36,11 +36,11 @@ impl ExitCode {
     }
 }
 
-impl From<ExitCode> for std::process::ExitCode {
-    fn from(code: ExitCode) -> Self {
-        std::process::ExitCode::from(u8::try_from(code.code()).unwrap_or(1))
-    }
-}
+// Note: no conversion to the standard library's process-exit type is
+// provided here — the numeric mapping happens at the binary edge (smah-cli)
+// to keep this crate clear of execution primitives. The no-shell CI gate
+// greps this tree for such paths, and the print-only invariant wants zero of
+// them in crates/*/src.
 
 #[cfg(test)]
 mod tests {

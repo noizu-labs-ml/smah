@@ -262,9 +262,7 @@ fn root_vsn(mapping: &Mapping) -> Option<String> {
 /// `k.lstrip("$").lstrip("{").rstrip("}")`: all leading `$`/`{` and all
 /// trailing `}` characters removed.
 pub fn strip_indirection(value: &str) -> &str {
-    value
-        .trim_start_matches(['$', '{'])
-        .trim_end_matches('}')
+    value.trim_start_matches(['$', '{']).trim_end_matches('}')
 }
 
 /// Provider env-var fallback chain: `SMAH_<PROVIDER>_API_KEY` →
