@@ -1,0 +1,11 @@
+[package]
+name = "smah-providers"
+version = "0.0.0"
+description = "SMAH provider layer: trait, registry, hand-rolled Anthropic/OpenAI clients, SSE."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+smah-core = { path = "../smah-core" }
