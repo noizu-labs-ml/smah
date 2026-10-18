@@ -5,6 +5,7 @@ model_picker:
     - "anthropic.claude-haiku-5-5"
     - "openai.gpt-4o-mini"
     - "openai.gpt-4o"
+    - "alibaba.Qwen 3.8 Flash"
   query:
     - "anthropic.claude-haiku-5-5"
   pipe:
@@ -397,3 +398,50 @@ providers:
             score: 0.4
           - name: "Data Analysis"
             score: 0.7
+  alibaba:
+    name: Alibaba
+    description: Alibaba Cloud DashScope (OpenAI-compatible) Models
+    enabled: true
+    settings:
+    vsn: "0.0.1"
+    models:
+      - name: "Qwen 3.8 Flash"
+        model: "qwen3.8-flash"
+        description: "Qwen 3.8 Flash — fast, inexpensive DashScope model for planning and picking (virtual-tools e2e)"
+        enabled: true
+        license: "Alibaba Cloud DashScope Terms of Service"
+        model_type: "LLM"
+        context:
+          window: 131072
+          out: 8192
+        strengths:
+          - "Fast"
+          - "Inexpensive"
+        weaknesses:
+          - "Less capable reasoning than larger models"
+        modalities:
+          text:
+            in: true
+            out: true
+        attributes:
+          speed: 8
+          reasoning: 5
+          planning: 5
+          creativity: 5
+          conciseness: 5
+          coding: 5
+        use_cases:
+          - name: "Code Generation"
+            score: 0.4
+          - name: "Text Generation"
+            score: 0.5
+          - name: "Translation"
+            score: 0.5
+          - name: "Planning"
+            score: 0.5
+          - name: "Reasoning"
+            score: 0.4
+          - name: "Creativity"
+            score: 0.4
+          - name: "Data Analysis"
+            score: 0.4
