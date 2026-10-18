@@ -13,11 +13,12 @@ RBAC/"SMAHRails" — **do not cite as mitigations; they don't exist.**
 · B3 model output ↔ parser/console/clipboard · B4 environment ↔ process ·
 B5 CI/CD ↔ PyPI · B6 model output ↔ virtual-tool file-surface executor + stdout
 gate (#17; print-only no longer fully separates model output from disk) ·
-B7 model-fabricated content ↔ loopback mock servers + browser page (#20/#19:
-loopback-only binds, escaped rendering, origin-checked regen/push; Rust
+B7 model-fabricated content ↔ loopback mock servers + browser page (#20/#19/#22/#21:
+loopback-only binds, escaped rendering, origin-checked regen/push,
+DTD-denying XML + descriptor-validated gRPC dispatch; Rust
 drivers stay print-only — they write files, never execute).
 
-**Register (21)**: 10 mitigated · 5 partial · 3 open · 3 accepted.
+**Register (25)**: 14 mitigated · 5 partial · 3 open · 3 accepted.
 
 | ID | Sev | Item | Status |
 |----|-----|------|--------|
@@ -42,6 +43,10 @@ drivers stay print-only — they write files, never execute).
 | T-019 | High | Web-driver XSS / cross-origin `/regen`+`/push` abuse (#19) | Mitigated |
 | T-020 | Med | Loopback mock server accidentally exposed beyond the host (#20/#19) | Mitigated |
 | T-021 | Med | Driver cache poisoning (`openapi.json`/`content.json` served unvalidated) | Mitigated |
+| T-022 | Med | SOAP XML abuse: DTD expansion / XXE / oversized envelopes (#22) | Mitigated |
+| T-023 | Med | grpc proto parse DoS + streaming shapes outside unary-only dispatch (#21) | Mitigated |
+| T-024 | Med | soap/grpc contract poisoning (cached WSDL/proto served unvalidated) | Mitigated |
+| T-025 | Med | soap/grpc loopback emulator mistaken for a real service / exposed beyond host | Mitigated |
 
 **Key controls (verified)**: print-only test + CI grep gate (Rust gate
 amended to execution primitives only — `Command::new`/`process::Command`/
@@ -55,14 +60,15 @@ controls: bind-address validation (loopback or refuse to start) with loud
 stderr disclosure, `html/template` + `textContent` rendering under CSP,
 loopback + same-origin gates on `/push` and `/regen`, sha-pinned
 validate-on-load caches, Go-service CI `os/exec` ban with positive-control
-self-test.
+self-test, soap DTD/entity-denying XML parsing with request caps, grpc
+bounded protox parse + unary-only descriptor-validated dispatch.
 
 **Residual**: local attacker reads all plaintext stores (accepted — same-account
 attacker is game over); user pastes a suggested command (accepted trade-off);
 provider-side retention of sensitive pipes (user's choice); unsigned tool
 files + TOCTOU window on the virtual-tool file surface (T-010/T-012 — read
 tools before installing, try `--no-fs` first); loopback mocks are deliberately
-convincing fabricated data (T-017..T-021 — never point a decision-making
+convincing fabricated data (T-017..T-025 — never point a decision-making
 client at one).
 
 **Details**: [threats/attack-surface.md](threats/attack-surface.md) ·
