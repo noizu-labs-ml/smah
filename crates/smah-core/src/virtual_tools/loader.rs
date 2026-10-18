@@ -11,8 +11,14 @@
 //!   must not silently drop a security-relevant constraint);
 //! - `name` must equal the stem, match [`crate::virtual_tools::is_valid_name`],
 //!   and not be in [`crate::virtual_tools::RESERVED_NAMES`];
-//! - `driver` (optional) only accepts `"emulated"` — unknown future drivers
-//!   (#19+) must not silently run as emulated;
+//! - `driver` (optional) names the presentation driver: the canonical set is
+//!   `cli | tui | web | api | soap | mcp | grpc | vfs | db` and `"emulated"`
+//!   is a permanent alias of `"cli"` (see [`crate::virtual_tools::drivers`]).
+//!   Unknown drivers reject the file — they must not silently run as the cli
+//!   driver — and [`ToolDef::driver`] stores the canonical name;
+//! - `interface` (optional) is the driver-specific contract artifact —
+//!   inline text or a path/`$VAR` reference, driver's choice. The loader
+//!   only checks that it is a string; each driver validates its own content;
 //! - `allow_roots` entries (`~/...` or whole-value `$VAR`) must resolve to an
 //!   existing directory at invoke time;
 //! - the markdown body (the tool's persona) is required and non-empty.
@@ -22,6 +28,7 @@ use std::path::{Path, PathBuf};
 use serde_yaml_ng::Value;
 
 use crate::errors::SmahError;
+use crate::virtual_tools::drivers::{canonical, DRIVER_NAMES};
 use crate::virtual_tools::{is_valid_name, RESERVED_NAMES};
 
 /// A parsed, valid tool definition.
@@ -33,8 +40,14 @@ pub struct ToolDef {
     pub description: String,
     /// `"<provider>.<model-id>"` or a bare model id; `None` = settings default.
     pub model: Option<String>,
-    /// Always `"emulated"` today; enforced at load.
+    /// Canonical driver name (`"cli"` for every legacy file — `"emulated"`
+    /// loads as `"cli"`; the other family members land with their lanes).
     pub driver: String,
+    /// Driver-specific contract artifact (the optional `interface:`
+    /// frontmatter key): inline text or a path/`$VAR` reference, whichever
+    /// the owning driver defines. `None` when absent; the loader does not
+    /// interpret it.
+    pub interface: Option<String>,
     /// Author-supplied hard rules, injected under a `Hard constraints:` heading.
     pub constraints: Vec<String>,
     /// Raw `allow_roots` entries (`~/...`, `$VAR`, absolute, relative) —
@@ -58,11 +71,12 @@ pub struct InvalidTool {
 }
 
 /// Frontmatter keys the loader accepts. Anything else rejects the file.
-pub const KNOWN_KEYS: [&str; 6] = [
+pub const KNOWN_KEYS: [&str; 7] = [
     "name",
     "description",
     "model",
     "driver",
+    "interface",
     "constraints",
     "allow_roots",
 ];
@@ -237,16 +251,26 @@ pub fn load_from(path: &Path) -> Result<ToolDef, String> {
         None => None,
     };
 
+    // Driver taxonomy: any family name (or the "emulated" alias) is
+    // accepted and stored canonically; unknown drivers reject so a typo or
+    // a not-yet-landed driver never silently runs as cli.
     let driver = match get_str("driver") {
         Some(Ok(d)) => d,
         Some(Err(err)) => return Err(err),
-        None => "emulated".to_string(),
+        None => "cli".to_string(),
     };
-    if driver != "emulated" {
-        return Err(format!(
-            "unknown driver '{driver}': only 'emulated' exists in this build"
-        ));
-    }
+    let driver = canonical(&driver).ok_or_else(|| {
+        format!(
+            "unknown driver '{driver}': known drivers are {} ('emulated' is an alias of 'cli')",
+            DRIVER_NAMES.join(", ")
+        )
+    })?;
+
+    let interface = match get_str("interface") {
+        Some(Ok(text)) => Some(text),
+        Some(Err(err)) => return Err(err),
+        None => None,
+    };
 
     let constraints = match get_list("constraints") {
         Some(Ok(list)) => list,
@@ -268,7 +292,8 @@ pub fn load_from(path: &Path) -> Result<ToolDef, String> {
         name,
         description,
         model,
-        driver,
+        driver: driver.to_string(),
+        interface,
         constraints,
         allow_roots,
         body,
