@@ -1,0 +1,79 @@
+name: Web vtool CI (Go)
+
+# Gates for services/web-vtool (#19) — the presentation half of the web
+# virtual tool. The service is glue only: it renders the Rust driver's
+# content.json and touches regen.request. It must never grow a process
+# execution primitive (print-only invariant, sibling of ci-rs.yml's
+# no-shell-gate) and never talk to a model provider.
+
+on:
+  pull_request:
+    paths:
+      - "services/web-vtool/**"
+      - ".github/workflows/ci-web-vtool.yml"
+  push:
+    branches: [develop, stage, main, epic.rust-tui]
+    paths:
+      - "services/web-vtool/**"
+      - ".github/workflows/ci-web-vtool.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  vet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0 (SHA-pinned, T-007)
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6 (SHA-pinned)
+        with:
+          go-version-file: services/web-vtool/go.mod
+      - run: go build ./...
+        working-directory: services/web-vtool
+      - run: go vet ./...
+        working-directory: services/web-vtool
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0 (SHA-pinned, T-007)
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6 (SHA-pinned)
+        with:
+          go-version-file: services/web-vtool/go.mod
+      - run: go test ./...
+        working-directory: services/web-vtool
+
+  no-exec-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0 (SHA-pinned, T-007)
+      - name: No process execution in the web-vtool service
+        run: |
+          # The Go service is presentation + filesystem glue. Spawning
+          # processes from it would bypass the print-only invariant the
+          # Rust tree enforces (T-017 gate) — ban every os/exec import or
+          # use.
+          if grep -rnE 'os/exec' services/web-vtool --include='*.go'; then
+            echo "::error::os/exec reference found in services/web-vtool. The web-vtool service is presentation-only."
+            exit 1
+          fi
+          echo "OK: no os/exec references in the Go service."
+      - name: Gate self-test (pattern must still catch the offender)
+        run: |
+          # Positive control: the gate MUST match the canonical offender
+          # shape, or it is silently weaker than intended. Never compiled —
+          # grep fixture only.
+          cat > /tmp/offender.go <<'EOF'
+          package main
+
+          import "os/exec"
+
+          func main() {
+              _ = exec.Command("ls")
+          }
+          EOF
+          if ! grep -qE 'os/exec' /tmp/offender.go; then
+            echo "::error::no-exec-gate pattern failed its self-test."
+            exit 1
+          fi
+          echo "OK: self-test — the gate still catches os/exec."
