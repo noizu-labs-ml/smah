@@ -150,3 +150,81 @@ fn row_internal_error_exits_1() {
         ExitCode::Internal,
     );
 }
+
+// ---------------------------------------------------------------------------
+// V-series — virtual tools (#17). Same snapshot discipline: exact text +
+// exit class. Documented in docs/ux/virtual-tools-cli-driver.md §6; the §4
+// table itself stays untouched.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn v_row_tool_not_found() {
+    snap(
+        "v_row_tool_not_found",
+        &SmahError::ToolNotFound {
+            name: "log-analyzer".to_string(),
+            installed: "(none)".to_string(),
+        },
+        ExitCode::Usage,
+    );
+}
+
+#[test]
+fn v_row_tool_not_found_with_installed() {
+    snap(
+        "v_row_tool_not_found_with_installed",
+        &SmahError::ToolNotFound {
+            name: "logz".to_string(),
+            installed: "commit-msg, log-analyzer".to_string(),
+        },
+        ExitCode::Usage,
+    );
+}
+
+#[test]
+fn v_row_tool_file_invalid() {
+    snap(
+        "v_row_tool_file_invalid",
+        &SmahError::ToolFileInvalid {
+            path: "/home/tester/.config/smah/virtual-tools/broken.md".to_string(),
+            detail: "unknown frontmatter key 'constrants'".to_string(),
+        },
+        ExitCode::Config,
+    );
+}
+
+#[test]
+fn v_row_directive_violation() {
+    snap(
+        "v_row_directive_violation",
+        &SmahError::DirectiveViolation {
+            tool: "log-analyzer".to_string(),
+            detail: "path '/etc/passwd' is outside the tool's allowed roots".to_string(),
+        },
+        ExitCode::Config,
+    );
+}
+
+#[test]
+fn v_row_directive_protocol() {
+    snap(
+        "v_row_directive_protocol",
+        &SmahError::DirectiveProtocol {
+            tool: "log-analyzer".to_string(),
+            detail: "line 3: directive JSON did not parse: expected value".to_string(),
+        },
+        ExitCode::Config,
+    );
+}
+
+#[test]
+fn v_row_directive_loop_overflow() {
+    snap(
+        "v_row_directive_loop_overflow",
+        &SmahError::DirectiveLoopOverflow {
+            tool: "log-analyzer".to_string(),
+            turns: 8,
+        },
+        ExitCode::Provider,
+    );
+}

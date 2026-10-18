@@ -58,6 +58,36 @@ pub const NETWORK_FAILURE: &str =
 pub const INTERNAL_ERROR: &str =
     "smah: internal error: {detail}. Full traceback in {logfile}. Please file an issue.";
 
+// --- Virtual tools — V-series extension (ticket #17) -----------------------
+//
+// The §4 table stays untouched for M5 parity; the CLI virtual-tool driver
+// extends it with five rows documented in docs/ux/virtual-tools-cli-driver.md
+// §6. Classes reuse the fixed six: no seventh exit code — a virtual-tool file
+// is user config, so invalid files and file-surface violations land in the
+// Config class (3), a missing tool is a Usage error (2), and a model that
+// never converges is the provider's problem (5).
+
+/// No virtual tool by that name (V-series, exit 2).
+pub const TOOL_NOT_FOUND: &str =
+    "smah: no virtual tool named '{name}'. Installed: {installed}. Run 'smah tools list'.";
+
+/// A virtual-tool file failed validation, or its declared file surface is
+/// unusable at invoke time (V-series, exit 3).
+pub const TOOL_FILE_INVALID: &str =
+    "smah: virtual-tool file at {path} is invalid: {detail}. Fix or remove the file; 'smah tools list' shows the reason.";
+
+/// A well-formed directive the driver refuses: outside the tool's allow
+/// roots, traversal, symlink on write, or aggregate write cap (V-series, exit 3).
+pub const DIRECTIVE_VIOLATION: &str = "smah: tool '{tool}' attempted a forbidden file operation: {detail}. Run aborted; the audit log has the attempt.";
+
+/// The model broke the directive line protocol (sentinel line that does not
+/// parse, oversized directive) (V-series, exit 3).
+pub const DIRECTIVE_PROTOCOL: &str =
+    "smah: tool '{tool}' sent a malformed virtual-tool directive ({detail}). Run aborted.";
+
+/// The model kept requesting file operations past the turn limit (V-series, exit 5).
+pub const DIRECTIVE_LOOP_OVERFLOW: &str = "smah: tool '{tool}' did not finish within {turns} turns of file operations. Try smaller input; the audit log shows what it attempted.";
+
 /// Render-time suffix naming the log file, appended to every row whose
 /// template does not already embed `{logfile}` (§4: "Every error ends by
 /// naming the log file with full detail").
@@ -182,6 +212,61 @@ pub fn internal_error(detail: impl AsRef<str>, logfile: impl AsRef<str>) -> Stri
     )
 }
 
+/// V-series: no such virtual tool. `installed` is a comma list or "(none)".
+pub fn tool_not_found(name: impl AsRef<str>, installed: impl AsRef<str>) -> String {
+    fill(
+        TOOL_NOT_FOUND,
+        &[
+            ("{name}", name.as_ref().to_string()),
+            ("{installed}", installed.as_ref().to_string()),
+        ],
+    )
+}
+
+/// V-series: virtual-tool file invalid (schema, name, or file surface).
+pub fn tool_file_invalid(path: impl AsRef<str>, detail: impl AsRef<str>) -> String {
+    fill(
+        TOOL_FILE_INVALID,
+        &[
+            ("{path}", path.as_ref().to_string()),
+            ("{detail}", detail.as_ref().to_string()),
+        ],
+    )
+}
+
+/// V-series: directive refused by the file-surface executor.
+pub fn directive_violation(tool: impl AsRef<str>, detail: impl AsRef<str>) -> String {
+    fill(
+        DIRECTIVE_VIOLATION,
+        &[
+            ("{tool}", tool.as_ref().to_string()),
+            ("{detail}", detail.as_ref().to_string()),
+        ],
+    )
+}
+
+/// V-series: directive line-protocol abuse.
+pub fn directive_protocol(tool: impl AsRef<str>, detail: impl AsRef<str>) -> String {
+    fill(
+        DIRECTIVE_PROTOCOL,
+        &[
+            ("{tool}", tool.as_ref().to_string()),
+            ("{detail}", detail.as_ref().to_string()),
+        ],
+    )
+}
+
+/// V-series: the model never converged within the turn limit.
+pub fn directive_loop_overflow(tool: impl AsRef<str>, turns: usize) -> String {
+    fill(
+        DIRECTIVE_LOOP_OVERFLOW,
+        &[
+            ("{tool}", tool.as_ref().to_string()),
+            ("{turns}", turns.to_string()),
+        ],
+    )
+}
+
 /// Every user-facing failure the CLI can terminate with.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SmahError {
@@ -270,6 +355,50 @@ pub enum SmahError {
         /// Internal message, one line.
         detail: String,
     },
+    /// V-series (#17) — no virtual tool by that name (exit 2, Usage).
+    #[error("{}", tool_not_found(.name, .installed))]
+    ToolNotFound {
+        /// The requested tool name.
+        name: String,
+        /// Installed tool names, comma-joined, or "(none)".
+        installed: String,
+    },
+    /// V-series (#17) — virtual-tool file invalid or its file surface
+    /// unusable at invoke time (exit 3, Config).
+    #[error("{}", tool_file_invalid(.path, .detail))]
+    ToolFileInvalid {
+        /// The tool file's path.
+        path: String,
+        /// Why it was rejected, one line.
+        detail: String,
+    },
+    /// V-series (#17) — well-formed directive the executor refuses (exit 3,
+    /// Config). Aborts the run; later directives are not executed.
+    #[error("{}", directive_violation(.tool, .detail))]
+    DirectiveViolation {
+        /// Tool name.
+        tool: String,
+        /// Path + reason, one line.
+        detail: String,
+    },
+    /// V-series (#17) — directive line-protocol abuse: a sentinel line that
+    /// does not parse as `@@smah <verb> <json>` (exit 3, Config).
+    #[error("{}", directive_protocol(.tool, .detail))]
+    DirectiveProtocol {
+        /// Tool name.
+        tool: String,
+        /// What was wrong with the line, one line.
+        detail: String,
+    },
+    /// V-series (#17) — model never converged within `TURNS_MAX` (exit 5,
+    /// Provider: model-side non-convergence).
+    #[error("{}", directive_loop_overflow(.tool, *.turns))]
+    DirectiveLoopOverflow {
+        /// Tool name.
+        tool: String,
+        /// The turn limit that was hit.
+        turns: usize,
+    },
 }
 
 /// Placeholder used only for `Display` on [`SmahError::Internal`]; the real
@@ -280,16 +409,22 @@ impl SmahError {
     /// Exit code class for this failure (erratum encoded: internal → 1).
     pub fn exit_code(&self) -> ExitCode {
         match self {
-            SmahError::AskNeedsQuery | SmahError::Usage { .. } => ExitCode::Usage,
+            SmahError::AskNeedsQuery | SmahError::Usage { .. } | SmahError::ToolNotFound { .. } => {
+                ExitCode::Usage
+            }
             SmahError::ConfigUnreadable { .. }
             | SmahError::ConfigGate { .. }
-            | SmahError::Database { .. } => ExitCode::Config,
+            | SmahError::Database { .. }
+            | SmahError::ToolFileInvalid { .. }
+            | SmahError::DirectiveViolation { .. }
+            | SmahError::DirectiveProtocol { .. } => ExitCode::Config,
             SmahError::MissingApiKey { .. }
             | SmahError::NoModelsEnabled
             | SmahError::ProviderAuth { .. } => ExitCode::Auth,
             SmahError::ProviderRequest { .. }
             | SmahError::ProviderUnavailable { .. }
-            | SmahError::Network { .. } => ExitCode::Provider,
+            | SmahError::Network { .. }
+            | SmahError::DirectiveLoopOverflow { .. } => ExitCode::Provider,
             SmahError::Internal { .. } => ExitCode::Internal,
         }
     }
