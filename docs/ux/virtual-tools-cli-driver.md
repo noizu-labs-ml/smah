@@ -36,7 +36,7 @@ are never run.
     name: log-analyzer
     description: Summarizes and filters application logs from stdin.
     model: anthropic.claude-opus-5-5        # optional; default model otherwise
-    driver: emulated                        # optional; "emulated" is the only driver today
+    driver: cli                            # optional; see the driver family below
     constraints:                            # optional hard rules for this tool
       - Never invent log lines that are not in the input.
     allow_roots:                            # optional; file-surface roots (see §5)
@@ -53,8 +53,14 @@ are never run.
 - `model` — optional. `<provider>.<model-id>` or a bare model id (default
   provider). A `--model` flag on the invocation wins over this; settings
   default otherwise.
-- `driver` — optional. Only `emulated` exists. Anything else: the tool will
-  not load.
+- `driver` — optional. One of the virtual-tools driver family: `cli`,
+  `tui`, `web`, `api`, `soap`, `mcp`, `grpc`, `vfs`, `db` (default `cli`).
+  `"emulated"` is a permanent alias of `cli`. Tools with a driver other
+  than `cli` load fine but refuse to run until that driver ships (see
+  [virtual-tools.md](virtual-tools.md) for the family and status).
+- `interface` — optional string. Reserved for non-cli drivers (a pointer to
+  the tool's interface description). Ignored by the `cli` driver; see
+  [virtual-tools.md](virtual-tools.md).
 - `constraints` — optional list of hard rules appended to the tool's prompt.
 - `allow_roots` — optional list of directories the tool may read or write
   (see §5). `~/...` and `$ENVVAR` forms are expanded. No list = no file
