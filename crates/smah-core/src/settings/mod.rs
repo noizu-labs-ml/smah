@@ -22,7 +22,7 @@ use serde_yaml_ng::{Mapping, Value};
 
 use crate::errors::SmahError;
 
-pub use defaults::{inference_defaults, INFERENCE_DEFAULTS_YAML};
+pub use defaults::{inference_defaults, resolve_display_model, INFERENCE_DEFAULTS_YAML};
 
 /// Current config schema version (Python parity: `Settings.CONFIG_VSN`).
 pub const CONFIG_VSN: &str = "0.0.1";

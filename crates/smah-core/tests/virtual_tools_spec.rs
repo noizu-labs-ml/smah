@@ -450,6 +450,85 @@ fn scanner_content_concatenation_preserves_everything_else() {
 }
 
 #[test]
+fn scanner_blank_lines_are_content_not_protocol() {
+    // Regression: a blank line stays "deciding" (`sentinel.starts_with("")`
+    // is vacuously true), which used to route it into the directive parser
+    // and abort the whole run post-stream with a protocol error.
+    let mut scanner = Scanner::new();
+    let (content, directives) = collect(&mut scanner, &["para one\n", "\n", "para two\n"]);
+    assert_eq!(content, "para one\n\npara two\n");
+    assert!(directives.is_empty());
+    assert!(scanner.error().is_none());
+}
+
+#[test]
+fn scanner_blank_line_before_a_sentinel_line() {
+    let mut scanner = Scanner::new();
+    let (content, directives) = collect(
+        &mut scanner,
+        &[
+            "intro\n",
+            "\n",
+            "@@smah read {\"path\": \"x.md\"}\n",
+            "outro\n",
+        ],
+    );
+    assert_eq!(content, "intro\n\noutro\n");
+    assert_eq!(
+        directives,
+        vec![Directive::Read {
+            path: "x.md".to_string()
+        }]
+    );
+    assert!(scanner.error().is_none());
+}
+
+#[test]
+fn scanner_blank_line_after_a_sentinel_line() {
+    let mut scanner = Scanner::new();
+    let (content, directives) = collect(
+        &mut scanner,
+        &[
+            "intro\n",
+            "@@smah read {\"path\": \"x.md\"}\n",
+            "\n",
+            "outro\n",
+        ],
+    );
+    assert_eq!(content, "intro\n\noutro\n");
+    assert_eq!(
+        directives,
+        vec![Directive::Read {
+            path: "x.md".to_string()
+        }]
+    );
+    assert!(scanner.error().is_none());
+}
+
+#[test]
+fn scanner_lone_sentinel_prefix_line_is_content_not_protocol() {
+    // "@\n" mid-stream used to abort; now the buffered prefix streams
+    // through with its newline, byte-for-byte.
+    let mut scanner = Scanner::new();
+    let (content, directives) = collect(&mut scanner, &["before\n", "@\n", "after\n"]);
+    assert_eq!(content, "before\n@\nafter\n");
+    assert!(directives.is_empty());
+    assert!(scanner.error().is_none());
+}
+
+#[test]
+fn scanner_unterminated_incomplete_sentinel_still_aborts_in_finish() {
+    // A sentinel line that never completes (no trailing newline, malformed
+    // payload) is still a directive attempt at end of stream — the
+    // `finish()` guard is unchanged by the blank-line fix.
+    let mut scanner = Scanner::new();
+    let (content, directives) = collect(&mut scanner, &["text\n", "@@smah write {\"path\": \"p\""]);
+    assert_eq!(content, "text\n");
+    assert!(directives.is_empty());
+    assert!(matches!(scanner.error(), Some(ScanError::Protocol { .. })));
+}
+
+#[test]
 fn input_cap_default_is_256k() {
     assert_eq!(DEFAULT_INPUT_BYTES, 256 * 1024);
     assert_eq!(WRITE_CONTENT_MAX, 128 * 1024);
@@ -782,6 +861,26 @@ impl ChatBackend for FakeBackend {
     }
 }
 
+/// Scripted backend that emits each chunk as its own delta — deterministic
+/// delta boundaries (unlike [`FakeBackend`]'s midpoint split), so tests can
+/// place blank lines inside specific deltas.
+struct ChunkedBackend(Vec<String>);
+
+impl ChatBackend for ChunkedBackend {
+    fn stream_turn(
+        &self,
+        _model: &str,
+        _system: &str,
+        _messages: &[ChatMessage],
+        on_delta: &mut dyn FnMut(&str),
+    ) -> Result<String, SmahError> {
+        for chunk in &self.0 {
+            on_delta(chunk);
+        }
+        Ok(self.0.concat())
+    }
+}
+
 /// A sink that records stdout/stderr separately.
 #[derive(Default)]
 struct MemSink {
@@ -860,6 +959,40 @@ fn driver_no_directive_single_turn_exit_ok() {
     assert_eq!(messages[0].role, Role::User);
     assert!(messages[0].content.contains("--info"));
     assert!(messages[0].content.contains("piped input"));
+}
+
+#[test]
+fn driver_multi_paragraph_answer_streams_byte_for_byte() {
+    // Regression for the exit-3 coin flip: deltas carrying blank lines must
+    // stream through untouched — same bytes out, no directive protocol
+    // error, single clean turn.
+    let (tool_dir, def) = tmp_tool("Be helpful.", None);
+    let _ = tool_dir;
+    let backend = ChunkedBackend(vec![
+        "Para one.\n".to_string(),
+        "\n".to_string(),
+        "Para two.\n\n".to_string(),
+        "\n".to_string(),
+        "Para three.\n".to_string(),
+    ]);
+    let mut sink = MemSink::default();
+    let outcome = run_with_turns(
+        &def,
+        &backend,
+        &mut sink,
+        "anthropic.claude-opus-5-5",
+        &[],
+        None,
+        false,
+        &FsMode::NoneDeclared,
+        &no_audit(),
+        "run-paragraphs",
+        TURNS_MAX,
+    )
+    .expect("run ok");
+    assert_eq!(outcome.turns, 1);
+    assert_eq!(sink.out, "Para one.\n\nPara two.\n\n\nPara three.\n");
+    assert!(sink.err.is_empty(), "no stderr notices: {:?}", sink.err);
 }
 
 #[test]
