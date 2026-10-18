@@ -1,0 +1,5 @@
+---
+source: crates/smah-core/tests/errors_spec.rs
+expression: error.render(LOG)
+---
+smah: tool 'log-analyzer' sent a malformed virtual-tool directive (line 3: directive JSON did not parse: expected value). Run aborted. Full log: /home/tester/.smah/logs/smah.20260101_000000.log.

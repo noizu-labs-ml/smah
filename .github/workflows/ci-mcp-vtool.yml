@@ -1,0 +1,48 @@
+name: ci-mcp-vtool
+
+# Standalone Elixir service gate for the virtual-MCP replay daemon
+# (ticket #23). Runs beside the Rust CI; excluded from the cargo tree.
+
+on:
+  pull_request:
+    paths:
+      - "services/mcp-vtool/**"
+      - ".github/workflows/ci-mcp-vtool.yml"
+  push:
+    branches: [develop, stage, main, epic.rust-tui]
+    paths:
+      - "services/mcp-vtool/**"
+      - ".github/workflows/ci-mcp-vtool.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/mcp-vtool
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0 (SHA-pinned, T-007)
+      - uses: erlef/setup-beam@5304e04ea2b355f03681464e683d92e3b2f18451 # v1.18.2 (SHA-pinned)
+        with:
+          elixir-version: "1.18"
+          otp-version: "27"
+      - run: mix deps.get
+      - run: mix compile --warnings-as-errors
+      - run: mix test
+
+  no-process-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0 (SHA-pinned, T-007)
+      - name: No OS-process escapes (print-only invariant)
+        run: |
+          # The replay service must never spawn OS processes: it is pure
+          # file replay over JSON-RPC (same invariant as the Rust tree's
+          # no-shell gate).
+          if grep -REn 'System\.cmd|Port\.open' services/mcp-vtool/lib; then
+            echo "::error::mcp-vtool must not spawn OS processes"
+            exit 1
+          fi

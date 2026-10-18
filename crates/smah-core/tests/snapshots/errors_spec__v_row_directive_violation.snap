@@ -1,0 +1,5 @@
+---
+source: crates/smah-core/tests/errors_spec.rs
+expression: error.render(LOG)
+---
+smah: tool 'log-analyzer' attempted a forbidden file operation: path '/etc/passwd' is outside the tool's allowed roots. Run aborted; the audit log has the attempt. Full log: /home/tester/.smah/logs/smah.20260101_000000.log.

@@ -1,0 +1,22 @@
+[package]
+name = "smah-providers"
+version = "0.0.0"
+description = "SMAH provider layer: trait, registry, hand-rolled Anthropic/OpenAI clients, SSE."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+smah-core = { path = "../smah-core" }
+reqwest = { workspace = true }
+futures-util = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml_ng = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+wiremock = { workspace = true }

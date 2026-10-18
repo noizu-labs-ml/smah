@@ -1,0 +1,18 @@
+[package]
+name = "smah-tui"
+version = "0.0.0"
+description = "SMAH terminal UI: ratatui app, widgets, event loop, TTY-gated surfaces."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# Leaf presentation crate: smah-core's virtual-tools driver family reaches
+# this crate (the frozen `--emulate` dispatch calls `drivers::tui::run` in
+# smah-core, so the TTY presentation must be linked from there — the old
+# smah-core dependency went the other way and is gone). No smah-core types
+# appear in this crate's API: plain strings only.
+[dependencies]
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+serde_json = { workspace = true }
