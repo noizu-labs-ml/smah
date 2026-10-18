@@ -26,6 +26,12 @@ smah/                                # repo root (trl-infra submodule at Project
 │   ├── PROJ-ARCH.summary.md         # condensed architecture reference
 │   ├── arch/                        # arch section details
 │   │   └── data-flow.md             #   stage-by-stage request lifecycle
+│   ├── THREAT-MODEL.md              # threat model: boundaries, STRIDE register, residual risk
+│   ├── THREAT-MODEL.summary.md      # condensed threat-model reference
+│   ├── threats/                     # threat-model details
+│   │   ├── attack-surface.md        #   ingress enumeration + STRIDE per boundary
+│   │   ├── data-stores.md           #   ~/.smah/ inventory; T-001/T-002 detail
+│   │   └── supply-chain.md          #   deps, CI/release path, PyPI OIDC
 │   ├── source/                      # Sphinx source: conf.py, index.rst, architecture.md, personas.md …
 │   │   ├── code/_autosummary/       #   GENERATED — sphinx autosummary stubs; regenerate, never edit
 │   │   ├── README.md                #   SYMLINK → root README.md

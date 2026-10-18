@@ -16,6 +16,12 @@ October 18 2026
   model, stdout/stderr contract, and exit codes. Supersedes the stale
   aspirational `docs/source/architecture.md` draft (recorded as a known
   gap), and records the stale OpenAI-only `doctor.__check_provider` bug.
+- Added `docs/THREAT-MODEL.md` (+ `.summary.md`, `threats/{attack-surface,
+  data-stores,supply-chain}.md`): STRIDE register (9 items, stable T-IDs)
+  over the print-only CLI's boundaries. Verified in code — highest finding:
+  T-001 (High) provider API key written plaintext to the DEBUG log via
+  `Settings.log()` save-mode dump on every ask; also clipboard auto-copy
+  without prompt (T-003) and tag-pinned CI actions (T-007).
 
 ### 0.2.1
 October 11 2026

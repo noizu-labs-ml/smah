@@ -16,7 +16,7 @@ smah/
 │   ├── runner/          #   prompt/response pipeline
 │   └── settings/        #   layered settings + config discovery
 ├── tests/               # pytest suite (flat)
-├── docs/                # Sphinx (source/) + UX specs (ux/) + layout & arch docs
+├── docs/                # Sphinx (source/) + UX specs (ux/) + layout/arch/threat docs
 │   └── source/code/_autosummary/   # GENERATED
 ├── .github/workflows/   # ci.yml (pytest), release.yml (PyPI OIDC)
 ├── pyproject.toml       # Poetry; console scripts smah, smah-db
