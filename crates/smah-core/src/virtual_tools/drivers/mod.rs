@@ -78,21 +78,18 @@ pub use crate::virtual_tools::driver::{
 };
 
 #[cfg(test)]
+#[cfg(test)]
 pub(crate) mod stub_test_support {
-    //! Shared fixtures for the eight per-stub self-tests. Lives beside the
-    //! stubs so it dies with them: once every lane lands, the whole module
-    //! (and its only callers) delete together.
+    //! Fixtures shared by the real lanes' self-tests (mcp/db/vfs): a backend
+    //! and a sink that must never be reached on the paths under test. The
+    //! PR-0 stub fixtures (`stub_tool`, `assert_refuses`) died with the last
+    //! stub driver once every lane landed.
 
-    use std::path::PathBuf;
-
-    use super::{ChatBackend, ChatMessage, FsMode, RunOutcome, Sink};
+    use super::{ChatBackend, ChatMessage, Sink};
     use crate::errors::SmahError;
-    use crate::exit_codes::ExitCode;
-    use crate::virtual_tools::audit::Audit;
-    use crate::virtual_tools::loader::ToolDef;
 
-    /// A backend that must never be reached (stubs refuse before any model
-    /// call).
+    /// A backend that must never be reached (the code under test refuses
+    /// before any model call).
     pub(crate) struct NullBackend;
 
     impl ChatBackend for NullBackend {
@@ -117,75 +114,6 @@ pub(crate) mod stub_test_support {
         }
 
         fn notice(&mut self, _line: &str) {}
-    }
-
-    /// A minimal valid tool claiming the given canonical driver.
-    pub(crate) fn stub_tool(driver: &str) -> ToolDef {
-        ToolDef {
-            name: "stub".to_string(),
-            description: "stub fixture".to_string(),
-            model: None,
-            driver: driver.to_string(),
-            constraints: Vec::new(),
-            allow_roots: Vec::new(),
-            interface: None,
-            body: "stub persona".to_string(),
-            path: PathBuf::from("stub.md"),
-        }
-    }
-
-    /// Assert a stub driver's `run` refuses with `DriverUnavailable`
-    /// carrying the right driver name, a non-empty hint, and the Config
-    /// exit class (3) — the contract every lane's replacement keeps.
-    pub(crate) fn assert_refuses<F>(run: F, driver: &str)
-    where
-        F: FnOnce(
-            &ToolDef,
-            &dyn ChatBackend,
-            &mut dyn Sink,
-            &str,
-            &[String],
-            Option<&str>,
-            bool,
-            &FsMode,
-            &Audit,
-            &str,
-        ) -> Result<RunOutcome, SmahError>,
-    {
-        // The Audit create_dir_all's its parent and chmods it 0700 — always
-        // hand it a path under a fresh tempdir, never a shared one.
-        let dir = tempfile::tempdir().expect("stub-test tempdir");
-        let audit = Audit::open_at(&dir.path().join("audit.jsonl"), "run");
-        let tool = stub_tool(driver);
-        let mut sink = NullSink;
-        let err = run(
-            &tool,
-            &NullBackend,
-            &mut sink,
-            "stub-model",
-            &[],
-            None,
-            false,
-            &FsMode::NoneDeclared,
-            &audit,
-            "stub-run",
-        )
-        .expect_err("stub driver must refuse");
-        let SmahError::DriverUnavailable { driver: got, hint } = &err else {
-            panic!("expected DriverUnavailable, got {err}");
-        };
-        assert_eq!(got, driver, "error names the canonical driver");
-        assert!(!hint.is_empty(), "hint is non-empty");
-        assert_eq!(
-            err.exit_code(),
-            ExitCode::Config,
-            "driver unavailability is Config class (exit 3)"
-        );
-        let rendered = err.to_string();
-        assert!(
-            rendered.contains(driver) && rendered.contains("driver"),
-            "rendered message names the driver: {rendered}"
-        );
     }
 }
 

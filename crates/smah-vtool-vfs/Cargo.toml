@@ -1,0 +1,13 @@
+[package]
+name = "smah-vtool-vfs"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+smah-core = { path = "../smah-core" }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+smah-providers = { path = "../smah-providers" }

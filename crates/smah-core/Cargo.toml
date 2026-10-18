@@ -15,6 +15,9 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 home = { workspace = true }
+# Virtual-postgres store (ticket #24): embedded SQLite read-only behind the
+# PG-wire subset; digest markers for the virtual-tool caches.
+rusqlite = { workspace = true, features = ["column_decltype"] }
 # Local-time log-file names (`smah.<YYYYmmdd_HHMMSS>.log`)
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # Virtual-tools wave-2 drivers (soap #22, grpc #21): loopback servers +
