@@ -11,6 +11,11 @@ October 18 2026
   project-tree map; marks generated (`_autosummary`), symlinked, and
   gitignored (`config/`, `.envrc.secret`/`.envrc.dev`) paths and the
   print-only safety invariant.
+- Added `docs/PROJ-ARCH.md` (+ `.summary.md`, `arch/data-flow.md`):
+  architecture overview of the plan→answer pipeline, provider seam, safety
+  model, stdout/stderr contract, and exit codes. Supersedes the stale
+  aspirational `docs/source/architecture.md` draft (recorded as a known
+  gap), and records the stale OpenAI-only `doctor.__check_provider` bug.
 
 ### 0.2.1
 October 11 2026

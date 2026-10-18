@@ -22,6 +22,10 @@ smah/                                # repo root (trl-infra submodule at Project
 ├── docs/                            # documentation
 │   ├── PROJ-LAYOUT.md               # this file
 │   ├── PROJ-LAYOUT.summary.md       # condensed tree (kept in sync with this file)
+│   ├── PROJ-ARCH.md                 # architecture overview (lifecycle, providers, safety, exit codes)
+│   ├── PROJ-ARCH.summary.md         # condensed architecture reference
+│   ├── arch/                        # arch section details
+│   │   └── data-flow.md             #   stage-by-stage request lifecycle
 │   ├── source/                      # Sphinx source: conf.py, index.rst, architecture.md, personas.md …
 │   │   ├── code/_autosummary/       #   GENERATED — sphinx autosummary stubs; regenerate, never edit
 │   │   ├── README.md                #   SYMLINK → root README.md
