@@ -149,6 +149,9 @@ struct VfsHandler<'a> {
     run_id: &'a str,
     dir: PathBuf,
     root: PathBuf,
+    /// Fabrication turns spent on `fs_generate` — folded into the run's
+    /// `RunOutcome::turns` so callers see total model exposure.
+    call_turns: std::cell::Cell<usize>,
 }
 
 impl VfsHandler<'_> {
@@ -293,6 +296,7 @@ impl VfsHandler<'_> {
                 &mut |_| {},
             )
             .map_err(|err| RpcError::new(RpcErrorCode::internal(), err.to_string()))?;
+        self.call_turns.set(self.call_turns.get() + 1);
         let text = tree::extract_json_object(&reply).ok_or_else(|| {
             RpcError::new(
                 RpcErrorCode::internal(),
@@ -474,7 +478,7 @@ pub fn run(
 
     let (root, turns) = tree::ensure_tree(tool, backend, model, audit, run_id, &dir, parsed.regen)?;
 
-    let outcome = |messages: Vec<ChatMessage>| RunOutcome {
+    let outcome = |turns: usize, messages: Vec<ChatMessage>| RunOutcome {
         turns,
         wrote_files: true,
         messages,
@@ -487,7 +491,7 @@ pub fn run(
 
     if parsed.show_tree {
         show_tree(tool, &root, sink);
-        return Ok(outcome(invocation));
+        return Ok(outcome(turns, invocation));
     }
     if parsed.no_serve {
         sink.notice(&format!(
@@ -496,7 +500,7 @@ pub fn run(
             tool.name,
             root.display()
         ));
-        return Ok(outcome(invocation));
+        return Ok(outcome(turns, invocation));
     }
 
     let mut handler = VfsHandler {
@@ -507,9 +511,11 @@ pub fn run(
         run_id,
         dir,
         root,
+        call_turns: std::cell::Cell::new(0),
     };
 
     if let Some(port) = parsed.tcp_port {
+        let handler_turns = handler.call_turns.get();
         let listener = std::net::TcpListener::bind(("127.0.0.1", port)).map_err(|err| {
             SmahError::ToolFileInvalid {
                 path: format!("127.0.0.1:{port}"),
@@ -546,7 +552,7 @@ pub fn run(
         .map_err(|err| SmahError::Internal {
             detail: format!("vfs tcp serve: {}", support::one_line(&err.to_string())),
         })?;
-        return Ok(outcome(invocation)); // unreachable in practice
+        return Ok(outcome(turns + handler_turns, invocation)); // unreachable in practice
     }
 
     // Default: newline-delimited batch over the invocation's stdin.
@@ -556,7 +562,7 @@ pub fn run(
             "smah(vfs): no requests on stdin (batch mode reads stdin to EOF); \
              start an interactive client with --tcp-port <n> or use --show-tree / --no-serve",
         );
-        return Ok(outcome(invocation));
+        return Ok(outcome(turns, invocation));
     }
     let answered = crate::virtual_tools::drivers::mcp::jsonrpc::serve_stdio_batch(
         stdin_text,
@@ -574,7 +580,7 @@ pub fn run(
         "allowed",
         "",
     );
-    Ok(outcome(invocation))
+    Ok(outcome(turns + handler.call_turns.get(), invocation))
 }
 
 #[cfg(test)]
@@ -645,6 +651,7 @@ mod tests {
             run_id: "run",
             dir: dir.to_path_buf(),
             root: root.to_path_buf(),
+            call_turns: std::cell::Cell::new(0),
         }
     }
 

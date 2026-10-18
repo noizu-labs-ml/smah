@@ -1740,6 +1740,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "smah-vtool-db"
+version = "0.0.0"
+dependencies = [
+ "serde_json",
+ "smah-core",
+ "smah-providers",
+ "tempfile",
+]
+
+[[package]]
+name = "smah-vtool-mcp"
+version = "0.0.0"
+dependencies = [
+ "serde_json",
+ "smah-core",
+ "smah-providers",
+ "tempfile",
+]
+
+[[package]]
+name = "smah-vtool-vfs"
+version = "0.0.0"
+dependencies = [
+ "serde_json",
+ "smah-core",
+ "smah-providers",
+ "tempfile",
+]
+
+[[package]]
 name = "smallvec"
 version = "1.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
