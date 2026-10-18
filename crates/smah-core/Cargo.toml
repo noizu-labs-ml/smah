@@ -37,3 +37,6 @@ tempfile = { workspace = true }
 # Env-gated real-qwen e2e (`#[ignore]`, never in CI): a tiny test-only
 # OpenAI-compatible chat client against ALIBABA_BASE_URL.
 reqwest = { workspace = true }
+# Integration tests drive the grpc driver with a tonic client; the path
+# argument is an `http::uri::PathAndQuery` (same 1.x crate tonic uses).
+http = "1"

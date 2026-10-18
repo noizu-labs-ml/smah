@@ -182,7 +182,9 @@ pub fn run(
         });
     }
 
-    serve(tool, backend, sink, model, contract, pool, parsed, run_id)
+    serve(
+        tool, backend, sink, model, contract, pool, parsed, audit, run_id,
+    )
 }
 
 /// Events flowing from the server thread (and its handlers) back to the
@@ -209,6 +211,7 @@ fn serve(
     contract: GrpcContract,
     pool: prost_reflect::DescriptorPool,
     parsed: GrpcArgs,
+    audit: &Audit,
     run_id: &str,
 ) -> Result<RunOutcome, SmahError> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -227,7 +230,7 @@ fn serve(
         pool,
         event_tx: event_tx.clone(),
         turns: Arc::clone(&turns),
-        audit: Audit::open(run_id),
+        audit: audit.clone(),
         run_id: run_id.to_string(),
     });
 

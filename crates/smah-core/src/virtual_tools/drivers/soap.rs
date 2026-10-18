@@ -179,7 +179,7 @@ pub fn run(
         });
     }
 
-    serve(tool, backend, sink, model, contract, parsed, run_id)
+    serve(tool, backend, sink, model, contract, parsed, audit, run_id)
 }
 
 /// Events flowing from the server thread (and its handlers) back to the
@@ -196,6 +196,8 @@ struct FabricateJob {
     reply: tokio::sync::oneshot::Sender<Result<String, String>>,
 }
 
+// Mirrors the grpc driver's serve(): the driver seam fixes this shape.
+#[allow(clippy::too_many_arguments)]
 fn serve(
     tool: &ToolDef,
     backend: &dyn ChatBackend,
@@ -203,6 +205,7 @@ fn serve(
     model: &str,
     contract: SoapContract,
     parsed: SoapArgs,
+    audit: &Audit,
     run_id: &str,
 ) -> Result<RunOutcome, SmahError> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -220,7 +223,7 @@ fn serve(
         contract,
         event_tx: event_tx.clone(),
         turns: Arc::clone(&turns),
-        audit: Audit::open(run_id),
+        audit: audit.clone(),
         run_id: run_id.to_string(),
     });
 
