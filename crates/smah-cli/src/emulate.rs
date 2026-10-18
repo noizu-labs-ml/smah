@@ -138,7 +138,6 @@ fn read_stdin_from<R: Read>(reader: &mut R, cap: usize) -> (String, usize) {
     (String::from_utf8_lossy(&raw).to_string(), total)
 }
 
-
 /// sha256 hex of the tool file (the cache marker).
 fn tool_sha256(tool: &loader::ToolDef) -> String {
     use sha2::{Digest, Sha256};

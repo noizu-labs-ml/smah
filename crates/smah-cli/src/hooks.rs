@@ -133,7 +133,8 @@ fn write_shims(dir: Option<&Path>) -> i32 {
         let live: Vec<String> = tools.iter().map(|t| format!("smah.{}", t.name)).collect();
         for entry in entries.filter_map(|e| e.ok()) {
             let name = entry.file_name().to_string_lossy().to_string();
-            if name.starts_with("smah.") && !live.contains(&name)
+            if name.starts_with("smah.")
+                && !live.contains(&name)
                 && std::fs::remove_file(entry.path()).is_ok()
             {
                 removed += 1;
