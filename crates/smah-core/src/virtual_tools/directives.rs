@@ -22,6 +22,14 @@
 //! executor refuses (`[directives::ScanError::Violation]`) aborts the run
 //! (both exit 3; see [`crate::errors::SmahError::DirectiveProtocol`] and
 //! [`crate::errors::SmahError::DirectiveViolation`]).
+//!
+//! Verb-set seam (PR-0): the base verb set is [`KNOWN_VERBS`]
+//! (`read`/`write`/`append`, each carrying a strict file-operation schema).
+//! [`Scanner::with_verbs`] lets a driver-family member accept *extension*
+//! verbs (e.g. the tui driver's `ui`); those parse as
+//! [`Directive::Extension`] with the raw payload carried through for the
+//! owning driver to validate and interpret. The base verbs and their
+//! schemas never change shape here.
 
 use serde_json::Value;
 use std::fmt;
@@ -53,32 +61,50 @@ pub enum Directive {
         /// Text to append.
         content: String,
     },
+    /// A driver-extension directive: `@@smah <verb> <json>` whose verb the
+    /// scanner accepts via [`Scanner::with_verbs`] but has no base schema
+    /// for. The payload is carried **raw** (unvalidated here) — the owning
+    /// driver parses and enforces its own contract (the
+    /// [`DIRECTIVE_LINE_MAX`] line cap is the only host-level limit).
+    /// Never produced by the cli driver's scanners.
+    Extension {
+        /// The extension verb (e.g. the tui driver's `ui`).
+        verb: String,
+        /// Raw post-verb payload text (possibly empty).
+        payload: String,
+    },
 }
 
 impl Directive {
     /// The verb word.
-    pub fn verb(&self) -> &'static str {
+    pub fn verb(&self) -> &str {
         match self {
             Directive::Read { .. } => "read",
             Directive::Write { .. } => "write",
             Directive::Append { .. } => "append",
+            Directive::Extension { verb, .. } => verb,
         }
     }
 
-    /// The requested path.
+    /// The requested path (empty for [`Directive::Extension`] — extension
+    /// directives carry no file path; the owning driver gives meaning to
+    /// its own payload).
     pub fn path(&self) -> &str {
         match self {
             Directive::Read { path }
             | Directive::Write { path, .. }
             | Directive::Append { path, .. } => path,
+            Directive::Extension { .. } => "",
         }
     }
 
-    /// Payload size in bytes (0 for read).
+    /// Payload size in bytes (0 for read; the raw extension payload for
+    /// extension directives).
     pub fn payload_bytes(&self) -> usize {
         match self {
             Directive::Read { .. } => 0,
             Directive::Write { content, .. } | Directive::Append { content, .. } => content.len(),
+            Directive::Extension { payload, .. } => payload.len(),
         }
     }
 }
@@ -93,12 +119,16 @@ pub enum ScanError {
         /// One-line description.
         detail: String,
     },
-    /// A well-formed line with a verb the executor does not know. Exit 3
+    /// A well-formed line with a verb this scanner does not accept. Exit 3
     /// via `DirectiveViolation` (D2: unknown verbs are a violation, not a
     /// negotiation).
     UnknownVerb {
         /// The verb that was not recognized.
         verb: String,
+        /// The verb set this scanner was configured with (the base set for
+        /// [`Scanner::new`], the extended set for [`Scanner::with_verbs`] —
+        /// so extended scanners report their own accepted verbs).
+        known: &'static [&'static str],
     },
 }
 
@@ -106,11 +136,11 @@ impl fmt::Display for ScanError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ScanError::Protocol { detail } => write!(f, "{detail}"),
-            ScanError::UnknownVerb { verb } => {
+            ScanError::UnknownVerb { verb, known } => {
                 write!(
                     f,
                     "unknown directive verb '{verb}'; known verbs: {}",
-                    KNOWN_VERBS.join(", ")
+                    known.join(", ")
                 )
             }
         }
@@ -124,7 +154,6 @@ impl fmt::Display for ScanError {
 /// prefix of the sentinel (≤ 7 bytes) or while the line *is* a sentinel
 /// directive (bounded by [`DIRECTIVE_LINE_MAX`]). Everything else streams
 /// through immediately, flushed per delta (§5 first-byte discipline).
-#[derive(Default)]
 pub struct Scanner {
     /// Current (unterminated) line under consideration.
     line: String,
@@ -140,11 +169,23 @@ pub struct Scanner {
     directives: Vec<Directive>,
     /// First protocol/verb error seen, if any.
     error: Option<ScanError>,
+    /// The accepted verb set (base verbs via [`Scanner::new`]; extended by
+    /// [`Scanner::with_verbs`]).
+    verbs: &'static [&'static str],
 }
 
 impl Scanner {
-    /// A fresh scanner.
+    /// A fresh scanner with the base verb set ([`KNOWN_VERBS`]).
     pub fn new() -> Self {
+        Scanner::with_verbs(&KNOWN_VERBS)
+    }
+
+    /// A fresh scanner accepting an extended verb set (the driver-family
+    /// seam): base verbs keep their strict schemas; any other accepted verb
+    /// parses as [`Directive::Extension`] with its raw payload. Unknown
+    /// verbs (outside `verbs`) stay a [`ScanError::UnknownVerb`] violation
+    /// whose message reports *this* set.
+    pub fn with_verbs(verbs: &'static [&'static str]) -> Self {
         Scanner {
             line: String::new(),
             deciding: true,
@@ -152,9 +193,18 @@ impl Scanner {
             content: String::new(),
             directives: Vec::new(),
             error: None,
+            verbs,
         }
     }
+}
 
+impl Default for Scanner {
+    fn default() -> Self {
+        Scanner::new()
+    }
+}
+
+impl Scanner {
     /// Feed one stream delta. `emit` receives content pieces (possibly
     /// empty-per-call splits; concatenation of all pieces is the full
     /// content with directive lines removed).
@@ -273,7 +323,7 @@ impl Scanner {
             });
             return;
         }
-        match parse_line(line) {
+        match parse_line(line, self.verbs) {
             Ok(Some(directive)) => self.directives.push(directive),
             Ok(None) => self.record(ScanError::Protocol {
                 detail: "sentinel line carries no directive".to_string(),
@@ -294,9 +344,12 @@ impl Scanner {
     }
 }
 
-/// Parse one complete sentinel line (no trailing newline). `Ok(None)` means
-/// the line was just the bare sentinel; the caller records the protocol error.
-fn parse_line(line: &str) -> Result<Option<Directive>, ScanError> {
+/// Parse one complete sentinel line (no trailing newline) against `verbs`.
+/// `Ok(None)` means the line was just the bare sentinel; the caller records
+/// the protocol error. Base verbs (read/write/append) keep their strict
+/// schemas; any other verb accepted by `verbs` becomes a raw
+/// [`Directive::Extension`].
+fn parse_line(line: &str, verbs: &'static [&'static str]) -> Result<Option<Directive>, ScanError> {
     let rest = match line.strip_prefix(SENTINEL) {
         Some(rest) => rest,
         None => return Ok(None), // caller guarantees sentinel-prefixed
@@ -309,11 +362,24 @@ fn parse_line(line: &str) -> Result<Option<Directive>, ScanError> {
     if verb.is_empty() {
         return Ok(None);
     }
-    if !KNOWN_VERBS.contains(&verb) {
+    if !verbs.contains(&verb) {
         return Err(ScanError::UnknownVerb {
             verb: verb.to_string(),
+            known: verbs,
         });
     }
+    match verb {
+        "read" | "write" | "append" => parse_file_directive(verb, payload).map(Some),
+        other => Ok(Some(Directive::Extension {
+            verb: other.to_string(),
+            payload: payload.to_string(),
+        })),
+    }
+}
+
+/// Parse the three base file-operation verbs (strict JSON-object schema —
+/// the contract the cli driver has always enforced).
+fn parse_file_directive(verb: &str, payload: &str) -> Result<Directive, ScanError> {
     let payload: Value = serde_json::from_str(payload).map_err(|err| ScanError::Protocol {
         detail: format!(
             "directive JSON did not parse: {}",
@@ -335,16 +401,16 @@ fn parse_line(line: &str) -> Result<Option<Directive>, ScanError> {
     };
     let path = take_str("path")?;
     match verb {
-        "read" => Ok(Some(Directive::Read { path })),
+        "read" => Ok(Directive::Read { path }),
         "write" => {
             let content = take_str("content")?;
-            Ok(Some(Directive::Write { path, content }))
+            Ok(Directive::Write { path, content })
         }
         "append" => {
             let content = take_str("content")?;
-            Ok(Some(Directive::Append { path, content }))
+            Ok(Directive::Append { path, content })
         }
-        _ => unreachable!("verb membership checked above"),
+        _ => unreachable!("base-verb set checked by parse_line"),
     }
 }
 

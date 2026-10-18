@@ -163,6 +163,12 @@ impl FileSurface {
             Directive::Read { path } => self.do_read(path),
             Directive::Write { path, content } => self.do_write(path, content, false),
             Directive::Append { path, content } => self.do_write(path, content, true),
+            // Unreachable from the cli driver: its scanners only accept the
+            // base verbs (extension directives are refused in
+            // `driver::execute_directive` before the surface is touched).
+            Directive::Extension { verb, .. } => Outcome::Violation {
+                detail: format!("directive verb '{verb}' has no file operation"),
+            },
         }
     }
 

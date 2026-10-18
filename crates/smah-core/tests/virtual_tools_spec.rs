@@ -46,7 +46,10 @@ fn loader_valid_fixture_parses_all_keys() {
     let def = load_from(&fixtures_dir().join("valid.md")).expect("valid fixture loads");
     assert_eq!(def.name, "valid");
     assert_eq!(def.model.as_deref(), Some("anthropic.claude-opus-5-5"));
-    assert_eq!(def.driver, "emulated");
+    // Canonicalization is spec'd: the file says `driver: emulated` (the
+    // permanent alias) and the loader stores the canonical name.
+    assert_eq!(def.driver, "cli");
+    assert_eq!(def.interface, None);
     assert_eq!(
         def.constraints,
         vec!["Never invent log lines that are not in the input."]
@@ -86,7 +89,75 @@ fn loader_bad_name_rejected() {
 #[test]
 fn loader_unknown_driver_rejected() {
     let err = load_from(&fixtures_dir().join("unknown-driver.md")).unwrap_err();
-    assert!(err.contains("unknown driver 'db'"), "{err}");
+    // 'fortran' is the fixture's deliberately-invalid driver; `db` became a
+    // real taxonomy member in PR-0.
+    assert!(err.contains("unknown driver 'fortran'"), "{err}");
+    assert!(err.contains("'emulated' is an alias of 'cli'"), "{err}");
+}
+
+#[test]
+fn loader_driver_taxonomy_accepts_all_nine_and_alias() {
+    // Every taxonomy value loads; the "emulated" alias loads too and is
+    // stored under its canonical name. In-test generation keeps this one
+    // file (instead of 10 fixtures) — a PR-0 deviation noted in the plan.
+    for value in smah_core::virtual_tools::drivers::DRIVER_NAMES {
+        let dir = tempfile::tempdir().expect("tmp");
+        write_tool(
+            dir.path(),
+            "d",
+            &valid_tool_yaml("d", &format!("driver: {value}\n")),
+        );
+        let def = load_from(&dir.path().join("d.md")).expect(value);
+        assert_eq!(def.driver, value, "canonical value stored verbatim");
+    }
+    let dir = tempfile::tempdir().expect("tmp");
+    write_tool(dir.path(), "d", &valid_tool_yaml("d", "driver: emulated\n"));
+    let def = load_from(&dir.path().join("d.md")).expect("alias loads");
+    assert_eq!(def.driver, "cli");
+}
+
+#[test]
+fn loader_driver_defaults_to_cli_when_absent() {
+    let dir = tempfile::tempdir().expect("tmp");
+    write_tool(dir.path(), "d", &valid_tool_yaml("d", ""));
+    let def = load_from(&dir.path().join("d.md")).expect("loads");
+    assert_eq!(def.driver, "cli");
+}
+
+#[test]
+fn loader_interface_key_present_absent_and_wrong_type() {
+    // String value → Some (the extension point other driver lanes read).
+    let dir = tempfile::tempdir().expect("tmp");
+    write_tool(
+        dir.path(),
+        "i",
+        &valid_tool_yaml(
+            "i",
+            "driver: mcp\ninterface: https://example.com/smah.json\n",
+        ),
+    );
+    let def = load_from(&dir.path().join("i.md")).expect("loads");
+    assert_eq!(def.driver, "mcp");
+    assert_eq!(
+        def.interface.as_deref(),
+        Some("https://example.com/smah.json")
+    );
+
+    // Absent → None (cli tools keep working unchanged).
+    let dir = tempfile::tempdir().expect("tmp");
+    write_tool(dir.path(), "i", &valid_tool_yaml("i", ""));
+    let def = load_from(&dir.path().join("i.md")).expect("loads");
+    assert_eq!(def.interface, None);
+
+    // Non-string → rejected like every other typed key.
+    let dir = tempfile::tempdir().expect("tmp");
+    write_tool(
+        dir.path(),
+        "i",
+        &valid_tool_yaml("i", "interface: [a, b]\n"),
+    );
+    let err = load_from(&dir.path().join("i.md")).unwrap_err();
+    assert!(err.contains("'interface' must be a string"), "{err}");
 }
 
 #[test]
@@ -280,6 +351,45 @@ fn scanner_unknown_verb_is_violation_class() {
         scanner.error(),
         Some(&ScanError::UnknownVerb {
             verb: "delete".to_string(),
+            known: smah_core::virtual_tools::KNOWN_VERBS.as_slice(),
+        })
+    );
+}
+
+#[test]
+fn scanner_with_verbs_accepts_extension_verb_raw() {
+    // The PR-0 seam: a driver lane (e.g. tui) builds a Scanner over its own
+    // verb set; verbs outside the base set arrive as Directive::Extension
+    // with the payload carried **raw** (no JSON validation here — the
+    // driver owns the format).
+    let mut scanner = Scanner::with_verbs(&["read", "ui"]);
+    let (content, directives) = collect(&mut scanner, &["@@smah ui not-json-at-all\n"]);
+    assert_eq!(content, "");
+    assert_eq!(
+        directives,
+        vec![Directive::Extension {
+            verb: "ui".to_string(),
+            payload: "not-json-at-all".to_string(),
+        }]
+    );
+    assert!(scanner.error().is_none());
+    // Base verbs still work on an extended scanner.
+    let (_, directives) = collect(&mut scanner, &["@@smah read {\"path\": \"a\"}\n"]);
+    assert!(matches!(directives.first(), Some(Directive::Read { .. })));
+}
+
+#[test]
+fn scanner_with_verbs_reports_its_own_known_set() {
+    // An extended scanner that sees a verb outside *its* set names its own
+    // verbs in the error (not the base set).
+    let mut scanner = Scanner::with_verbs(&["ui", "focus"]);
+    let (_, directives) = collect(&mut scanner, &["@@smah write {\"path\": \"x\"}\n"]);
+    assert!(directives.is_empty());
+    assert_eq!(
+        scanner.error(),
+        Some(&ScanError::UnknownVerb {
+            verb: "write".to_string(),
+            known: &["ui", "focus"],
         })
     );
 }

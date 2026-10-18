@@ -83,7 +83,7 @@ fn shims_write_refresh_and_remove_stale() {
         assert_eq!(meta.permissions().mode() & 0o777, 0o755, "{name}");
         let script = std::fs::read_to_string(&path).expect(name);
         assert!(
-            script.starts_with("#!/bin/sh\nexec smah --emulate-cli "),
+            script.starts_with("#!/bin/sh\nexec smah --emulate "),
             "{script}"
         );
     }

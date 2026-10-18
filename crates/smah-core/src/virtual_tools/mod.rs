@@ -5,11 +5,15 @@
 //!
 //! Modules:
 //! - [`loader`]: parse/validate/discover `~/.config/smah/virtual-tools/*.md`
-//! - [`directives`]: the `@@smah` line-protocol scanner
+//! - [`directives`]: the `@@smah` line-protocol scanner (verb-set seam for
+//!   the driver family)
 //! - [`fs_surface`]: allowlist-root containment + directive execution
 //! - [`audit`]: append-only JSONL audit log
-//! - [`driver`]: the multi-turn loop, [`driver::ChatBackend`] and
-//!   [`driver::Sink`] seams, prompt assembly
+//! - [`driver`]: the **cli** driver — the multi-turn loop,
+//!   [`driver::ChatBackend`] and [`driver::Sink`] seams, prompt assembly
+//! - [`drivers`]: the driver-family taxonomy (`cli | tui | web | api | soap
+//!   | mcp | grpc | vfs | db`; `"emulated"` is a permanent alias of `cli`)
+//!   and the per-driver stub registry
 //!
 //! Every size cap lives in this module's [`limits`](self) constants so the
 //! driver spec doc can be cross-checked against one place.
@@ -17,6 +21,7 @@
 pub mod audit;
 pub mod directives;
 pub mod driver;
+pub mod drivers;
 pub mod fs_surface;
 pub mod loader;
 
@@ -50,9 +55,11 @@ pub const RESERVED_NAMES: [&str; 12] = [
     "help", "version",
 ];
 
-/// The only directive verbs the executor knows. Anything else in a
-/// well-formed directive line is a violation (unknown future verbs belong to
-/// later drivers and must not run as file operations).
+/// The base directive verbs the **cli** driver's scanners accept. Driver
+/// family members extend their own verb sets via
+/// [`directives::Scanner::with_verbs`] (extension verbs parse as
+/// [`directives::Directive::Extension`] with the raw payload); anything
+/// outside a scanner's configured set is a violation.
 pub const KNOWN_VERBS: [&str; 3] = ["read", "write", "append"];
 
 /// Tool-name rule, implemented as a validator (no regex dependency):

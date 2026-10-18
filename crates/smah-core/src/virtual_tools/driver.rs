@@ -258,6 +258,9 @@ pub fn run_with_turns(
                         Directive::Read { .. } => "read",
                         Directive::Append { .. } => "appended to",
                         Directive::Write { .. } => "wrote",
+                        // Unreachable: extension directives are refused in
+                        // execute_directive before anything returns Allowed.
+                        Directive::Extension { .. } => "handled",
                     };
                     sink.notice(&format!(
                         "smah(virtual): {} {} {} {} {}",
@@ -346,6 +349,14 @@ fn execute_directive(
     surface: &mut Option<FileSurface>,
     directive: &Directive,
 ) -> ExecOutcome {
+    // Driver-extension verbs are another driver's surface; the cli driver
+    // never executes them. (Its scanners only accept the base verbs, so in
+    // practice this arm is unreachable from `run` — it guards direct reuse.)
+    if let Directive::Extension { verb, .. } = directive {
+        return ExecOutcome::Violation(format!(
+            "directive verb '{verb}' belongs to another driver; the cli driver cannot execute it"
+        ));
+    }
     match fs_mode {
         FsMode::NoneDeclared => ExecOutcome::Violation(format!(
             "tool declares no allow_roots, so it has no file surface; '{} {}' is not permitted",
@@ -381,6 +392,11 @@ fn execute_directive(
                                 true,
                             )
                         }
+                        // Unreachable: extension directives are refused
+                        // before the surface executes anything.
+                        Directive::Extension { verb, .. } => ExecOutcome::Violation(format!(
+                            "directive verb '{verb}' belongs to another driver"
+                        )),
                     }
                 }
                 Outcome::SoftError { detail } => ExecOutcome::SoftError(detail),
@@ -469,8 +485,14 @@ commentary about being an AI.\n\
 - If the invocation says the input was truncated, treat it as partial: work \
 with what is shown and never claim to have seen the rest.\n";
 
-/// The invocation user message: tool, args one-per-line, stdin.
-fn invocation_block(args: &[String], stdin: Option<&str>, stdin_partial: bool) -> String {
+/// The invocation user message: tool, args one-per-line, stdin. Shared with
+/// the driver family (`pub(crate)`): drivers that keep the invocation-block
+/// contract reuse it instead of re-inventing it.
+pub(crate) fn invocation_block(
+    args: &[String],
+    stdin: Option<&str>,
+    stdin_partial: bool,
+) -> String {
     let mut block = String::from("Tool invocation:\n\n");
     if args.is_empty() {
         block.push_str("arguments: (none)\n");
@@ -498,8 +520,9 @@ fn invocation_block(args: &[String], stdin: Option<&str>, stdin_partial: bool) -
     block
 }
 
-/// File-surface results user message.
-fn results_block(results: &[String]) -> String {
+/// File-surface results user message. Shared with the driver family
+/// (`pub(crate)`) for drivers that keep the results-block contract.
+pub(crate) fn results_block(results: &[String]) -> String {
     let mut block = String::from("File surface results for your directives:\n\n");
     for line in results {
         block.push_str(line);
@@ -515,9 +538,7 @@ fn results_block(results: &[String]) -> String {
 fn scan_error_detail(err: &ScanError) -> String {
     match err {
         ScanError::Protocol { detail } => detail.clone(),
-        ScanError::UnknownVerb { verb } => {
-            format!("unknown directive verb '{verb}'")
-        }
+        ScanError::UnknownVerb { verb, .. } => format!("unknown directive verb '{verb}'"),
     }
 }
 

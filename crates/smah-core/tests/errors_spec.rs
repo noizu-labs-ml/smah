@@ -228,3 +228,16 @@ fn v_row_directive_loop_overflow() {
         ExitCode::Provider,
     );
 }
+
+#[test]
+fn v_row_driver_unavailable() {
+    // PR-0: the stub drivers' refusal row (Config class, exit 3).
+    snap(
+        "v_row_driver_unavailable",
+        &SmahError::DriverUnavailable {
+            driver: "tui".to_string(),
+            hint: "not implemented yet; the tui virtual tool ships in a later release".to_string(),
+        },
+        ExitCode::Config,
+    );
+}

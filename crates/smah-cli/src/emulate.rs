@@ -1,7 +1,10 @@
-//! `smah --emulate-cli <tool>` — the emulated-CLI wiring (design decisions
-//! D2/D4/D5/D6): settings + tool load, stdin handling with loud truncation,
-//! the file-surface disclosure line, provider resolution through the M2
-//! adapter, exit-code discipline, and the write-only transcript cache.
+//! `smah --emulate <tool>` / `smah --emulate-cli <tool>` — the virtual-tool
+//! wiring (design decisions D2/D4/D5/D6): settings + tool load, stdin
+//! handling with loud truncation, the file-surface disclosure line, provider
+//! resolution through the M2 adapter, exit-code discipline, and the
+//! write-only transcript cache. PR-0 adds the driver dispatch: `--emulate`
+//! resolves the driver from the tool file; `--emulate-cli` forces the cli
+//! driver (compat form). Everything before the dispatch is shared prelude.
 
 use std::io::{IsTerminal, Read};
 use std::path::PathBuf;
@@ -10,6 +13,7 @@ use smah_core::errors::SmahError;
 use smah_core::settings::Settings;
 use smah_core::virtual_tools::audit::{cache_dir, Audit};
 use smah_core::virtual_tools::driver::{self, FsMode, StdSink};
+use smah_core::virtual_tools::drivers;
 use smah_core::virtual_tools::loader;
 use smah_core::virtual_tools::DEFAULT_INPUT_BYTES;
 
@@ -85,18 +89,126 @@ fn run_emulate_inner(cli: &Cli, tool_name: &str, tool_args: &[String]) -> Result
     let backend = ProviderBackend::new(provider);
     let mut sink = StdSink;
 
-    match driver::run(
-        &tool,
-        &backend,
-        &mut sink,
-        &model_id,
-        tool_args,
-        stdin_text.as_deref(),
-        stdin_partial,
-        &fs_mode,
-        &audit,
-        &run_id,
-    ) {
+    // Driver dispatch (PR-0 seam): the loader stores canonical names only,
+    // so every arm below is exact. `--emulate-cli` is the forced-cli compat
+    // form; `--emulate` follows the tool file's `driver:` field.
+    let driver_name: &str = if cli.emulate_cli.is_some() {
+        "cli"
+    } else {
+        &tool.driver
+    };
+    let outcome = match driver_name {
+        "cli" => driver::run(
+            &tool,
+            &backend,
+            &mut sink,
+            &model_id,
+            tool_args,
+            stdin_text.as_deref(),
+            stdin_partial,
+            &fs_mode,
+            &audit,
+            &run_id,
+        ),
+        "tui" => drivers::tui::run(
+            &tool,
+            &backend,
+            &mut sink,
+            &model_id,
+            tool_args,
+            stdin_text.as_deref(),
+            stdin_partial,
+            &fs_mode,
+            &audit,
+            &run_id,
+        ),
+        "web" => drivers::web::run(
+            &tool,
+            &backend,
+            &mut sink,
+            &model_id,
+            tool_args,
+            stdin_text.as_deref(),
+            stdin_partial,
+            &fs_mode,
+            &audit,
+            &run_id,
+        ),
+        "api" => drivers::api::run(
+            &tool,
+            &backend,
+            &mut sink,
+            &model_id,
+            tool_args,
+            stdin_text.as_deref(),
+            stdin_partial,
+            &fs_mode,
+            &audit,
+            &run_id,
+        ),
+        "soap" => drivers::soap::run(
+            &tool,
+            &backend,
+            &mut sink,
+            &model_id,
+            tool_args,
+            stdin_text.as_deref(),
+            stdin_partial,
+            &fs_mode,
+            &audit,
+            &run_id,
+        ),
+        "mcp" => drivers::mcp::run(
+            &tool,
+            &backend,
+            &mut sink,
+            &model_id,
+            tool_args,
+            stdin_text.as_deref(),
+            stdin_partial,
+            &fs_mode,
+            &audit,
+            &run_id,
+        ),
+        "grpc" => drivers::grpc::run(
+            &tool,
+            &backend,
+            &mut sink,
+            &model_id,
+            tool_args,
+            stdin_text.as_deref(),
+            stdin_partial,
+            &fs_mode,
+            &audit,
+            &run_id,
+        ),
+        "vfs" => drivers::vfs::run(
+            &tool,
+            &backend,
+            &mut sink,
+            &model_id,
+            tool_args,
+            stdin_text.as_deref(),
+            stdin_partial,
+            &fs_mode,
+            &audit,
+            &run_id,
+        ),
+        "db" => drivers::db::run(
+            &tool,
+            &backend,
+            &mut sink,
+            &model_id,
+            tool_args,
+            stdin_text.as_deref(),
+            stdin_partial,
+            &fs_mode,
+            &audit,
+            &run_id,
+        ),
+        other => unreachable!("loader stores canonical driver names only, got '{other}'"),
+    };
+    match outcome {
         Ok(outcome) => {
             write_transcript(&tool, &outcome.messages);
             Ok(0)

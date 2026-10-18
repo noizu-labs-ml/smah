@@ -9,8 +9,9 @@ license = "MIT"
 repository = "https://github.com/noizu-labs-ml/smah"
 
 [workspace.dependencies]
-# Async runtime (rt-multi-thread/macros/sync/time per plan §B)
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+# Async runtime (rt-multi-thread/macros/sync/time per plan §B; net/io-util pre-added
+# for the virtual-tools driver family — api/mcp/grpc drivers land with their lanes)
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util"] }
 # CLI (clap 4 derive; global flags, hidden aliases, ArgAction::Count for -v)
 clap = { version = "4", features = ["derive"] }
 # TUI
@@ -45,6 +46,15 @@ sha2 = "0.10"
 # Logging + redaction writer (T-001 fix)
 tracing = "0.1"
 tracing-subscriber = "0.3"
+# Virtual-tools driver family (PR-0 pre-add; lanes never edit this file).
+# Versions verified current + mutually compatible 2026-10-18 (axum 0.8.9,
+# tonic 0.14.6, prost 0.14.4, prost-reflect 0.16.5, protox 0.10.0). Nothing
+# depends on them until a lane's crate does.
+axum = { version = "0.8", features = ["json"] }
+tonic = "0.14"
+prost = "0.14"
+prost-reflect = "0.16"
+protox = "0.10"
 # Dev/test
 wiremock = "0.6"
 assert_cmd = "2"

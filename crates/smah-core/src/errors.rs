@@ -65,7 +65,9 @@ pub const INTERNAL_ERROR: &str =
 // §6. Classes reuse the fixed six: no seventh exit code — a virtual-tool file
 // is user config, so invalid files and file-surface violations land in the
 // Config class (3), a missing tool is a Usage error (2), and a model that
-// never converges is the provider's problem (5).
+// never converges is the provider's problem (5). PR-0 adds a sixth row for
+// the driver family (`DRIVER_UNAVAILABLE`, also Config): a valid tool file
+// whose declared driver has no implementation in this build.
 
 /// No virtual tool by that name (V-series, exit 2).
 pub const TOOL_NOT_FOUND: &str =
@@ -87,6 +89,12 @@ pub const DIRECTIVE_PROTOCOL: &str =
 
 /// The model kept requesting file operations past the turn limit (V-series, exit 5).
 pub const DIRECTIVE_LOOP_OVERFLOW: &str = "smah: tool '{tool}' did not finish within {turns} turns of file operations. Try smaller input; the audit log shows what it attempted.";
+
+/// The tool file declares a driver this build cannot serve (V-series, exit 3
+/// — Config class: the file is valid config naming a missing implementation).
+/// `{driver}` is the canonical driver name; `{hint}` is the driver module's
+/// one-line status.
+pub const DRIVER_UNAVAILABLE: &str = "smah: virtual-tool driver '{driver}' is not available in this build ({hint}). See docs/ux/virtual-tools.md for the driver family.";
 
 /// Render-time suffix naming the log file, appended to every row whose
 /// template does not already embed `{logfile}` (§4: "Every error ends by
@@ -267,6 +275,17 @@ pub fn directive_loop_overflow(tool: impl AsRef<str>, turns: usize) -> String {
     )
 }
 
+/// V-series: the tool's declared driver has no implementation in this build.
+pub fn driver_unavailable(driver: impl AsRef<str>, hint: impl AsRef<str>) -> String {
+    fill(
+        DRIVER_UNAVAILABLE,
+        &[
+            ("{driver}", driver.as_ref().to_string()),
+            ("{hint}", hint.as_ref().to_string()),
+        ],
+    )
+}
+
 /// Every user-facing failure the CLI can terminate with.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SmahError {
@@ -399,6 +418,17 @@ pub enum SmahError {
         /// The turn limit that was hit.
         turns: usize,
     },
+    /// V-series (driver family, PR-0) — the tool file declares a driver this
+    /// build cannot serve (exit 3, Config: the file is valid but names a
+    /// missing implementation). A stub driver always answers with this.
+    #[error("{}", driver_unavailable(.driver, .hint))]
+    DriverUnavailable {
+        /// Canonical driver name (`tui`, `web`, ... — never the `"emulated"`
+        /// alias, which loads as `"cli"`).
+        driver: String,
+        /// One-line status (stub: "not implemented yet; ...").
+        hint: String,
+    },
 }
 
 /// Placeholder used only for `Display` on [`SmahError::Internal`]; the real
@@ -417,7 +447,8 @@ impl SmahError {
             | SmahError::Database { .. }
             | SmahError::ToolFileInvalid { .. }
             | SmahError::DirectiveViolation { .. }
-            | SmahError::DirectiveProtocol { .. } => ExitCode::Config,
+            | SmahError::DirectiveProtocol { .. }
+            | SmahError::DriverUnavailable { .. } => ExitCode::Config,
             SmahError::MissingApiKey { .. }
             | SmahError::NoModelsEnabled
             | SmahError::ProviderAuth { .. } => ExitCode::Auth,
