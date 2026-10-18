@@ -1,0 +1,58 @@
+name: Rust CI
+
+# Rust-tree gates for the TUI rewrite (runs alongside the Python ci.yml
+# until cutover, milestone M9). Print-only invariant: the Rust tree must
+# never grow a process-execution primitive.
+
+on:
+  pull_request:
+  push:
+    branches: [develop, stage, main, epic.rust-tui]
+
+permissions:
+  contents: read
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0 (SHA-pinned, T-007)
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable (SHA-pinned)
+      - uses: Swatinem/rust-cache@8cbdedb5103daa674dcf46d3590fe06a76645684 # v2.8.0 (SHA-pinned)
+      - run: cargo fmt --check
+
+  clippy:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0 (SHA-pinned, T-007)
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable (SHA-pinned)
+      - uses: Swatinem/rust-cache@8cbdedb5103daa674dcf46d3590fe06a76645684 # v2.8.0 (SHA-pinned)
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0 (SHA-pinned, T-007)
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable (SHA-pinned)
+      - uses: Swatinem/rust-cache@8cbdedb5103daa674dcf46d3590fe06a76645684 # v2.8.0 (SHA-pinned)
+      - run: cargo test --workspace
+
+  no-shell-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0 (SHA-pinned, T-007)
+      - name: No shell execution (print-only invariant)
+        run: |
+          if grep -rnE 'Command::new|process::spawn|std::process' crates/*/src; then
+            echo "::error::Process/shell execution primitive found in crates/*/src. SMAH is print-only."
+            exit 1
+          fi
+          echo "OK: no shell-execution primitives in the Rust tree."

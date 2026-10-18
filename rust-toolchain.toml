@@ -1,0 +1,4 @@
+# Stable channel (auto-tracking). Declared MSRV is 1.82 via workspace
+# `rust-version`; the MSRV CI job arrives in milestone M9.
+[toolchain]
+channel = "stable"

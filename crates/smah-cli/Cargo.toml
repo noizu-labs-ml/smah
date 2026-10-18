@@ -1,0 +1,17 @@
+[package]
+name = "smah-cli"
+version = "0.0.0"
+description = "SMAH CLI: clap command tree, dispatch, and the smah/smah-db binaries."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+smah-core = { path = "../smah-core" }
+smah-providers = { path = "../smah-providers" }
+smah-tui = { path = "../smah-tui" }
+
+[[bin]]
+name = "smah"
+path = "src/main.rs"
