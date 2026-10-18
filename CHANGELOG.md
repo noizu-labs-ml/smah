@@ -4,6 +4,14 @@ CHANGE LOG
 
 ## Changes
 
+### Unreleased
+October 18 2026
+
+- Added `docs/PROJ-LAYOUT.md` (+ `docs/PROJ-LAYOUT.summary.md`): navigable
+  project-tree map; marks generated (`_autosummary`), symlinked, and
+  gitignored (`config/`, `.envrc.secret`/`.envrc.dev`) paths and the
+  print-only safety invariant.
+
 ### 0.2.1
 October 11 2026
 
