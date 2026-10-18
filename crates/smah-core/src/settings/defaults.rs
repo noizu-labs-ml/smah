@@ -27,6 +27,27 @@ pub fn inference_defaults() -> &'static Value {
     })
 }
 
+/// Resolve a provider catalog **display name** to its raw model id,
+/// case-insensitively ("Qwen 3.8 Flash" → `qwen3.8-flash`). `None` when the
+/// provider is not in the catalog or no entry's `name` matches — callers
+/// pass the input through unchanged, so raw ids keep working and unknown
+/// names surface as the provider's own not-found error.
+pub fn resolve_display_model(provider: &str, model: &str) -> Option<String> {
+    let models = inference_defaults()
+        .get("providers")?
+        .get(provider)?
+        .get("models")?
+        .as_sequence()?;
+    models
+        .iter()
+        .filter_map(|entry| {
+            let name = entry.get("name")?.as_str()?;
+            let id = entry.get("model")?.as_str()?;
+            name.eq_ignore_ascii_case(model).then(|| id.to_string())
+        })
+        .next()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -76,5 +97,24 @@ mod tests {
                 .and_then(Value::as_bool),
             Some(true)
         );
+    }
+
+    #[test]
+    fn display_names_resolve_case_insensitively_unknown_stay_none() {
+        assert_eq!(
+            resolve_display_model("alibaba", "Qwen 3.8 Flash"),
+            Some("qwen3.8-flash".to_string())
+        );
+        assert_eq!(
+            resolve_display_model("alibaba", "qwen 3.8 FLASH"),
+            Some("qwen3.8-flash".to_string())
+        );
+        // A raw id is not a display name: no match, caller passes through.
+        assert_eq!(resolve_display_model("alibaba", "qwen3.8-flash"), None);
+        assert_eq!(
+            resolve_display_model("alibaba", "Definitely Not A Model"),
+            None
+        );
+        assert_eq!(resolve_display_model("no-such-provider", "anything"), None);
     }
 }

@@ -227,14 +227,23 @@ impl Scanner {
             let line = std::mem::take(&mut self.line);
             let deciding = self.deciding;
             self.deciding = true;
-            if deciding {
-                // CRLF: strip the trailing CR before parsing the directive.
-                let trimmed = line.strip_suffix('\r').unwrap_or(&line).to_string();
-                self.handle_directive_line(&trimmed);
+            // CRLF: strip the trailing CR before the sentinel check/parse.
+            let trimmed = line.strip_suffix('\r').unwrap_or(&line);
+            if deciding && trimmed.starts_with(SENTINEL) {
+                self.handle_directive_line(trimmed);
             } else {
                 // Content line already emitted except its trailing newline;
                 // emit it (minus a CR that belonged to the directive check —
-                // content lines keep their bytes verbatim).
+                // content lines keep their bytes verbatim). While still
+                // `deciding` the buffered head never streamed — flush it
+                // first (a blank line, or a lone sentinel prefix like `@`,
+                // is ordinary prose, not a directive: the same guard
+                // `finish()` applies). Without it every blank line in a
+                // streamed answer aborted post-stream with a protocol
+                // error, and paragraph breaks were silently dropped.
+                if deciding {
+                    self.emit_content(&line, emit);
+                }
                 self.emit_content("\n", emit);
             }
         }

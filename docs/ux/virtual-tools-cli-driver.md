@@ -53,12 +53,22 @@ are never run.
 - `model` — optional. `<provider>.<model-id>` or a bare model id (default
   provider). A `--model` flag on the invocation wins over this; settings
   default otherwise.
+  - **Runbook note (verified):** the model part accepts either a raw
+    provider id (`alibaba.qwen3.8-flash`) or the catalog display name
+    (`alibaba.Qwen 3.8 Flash`) — display names resolve case-insensitively
+    through the embedded inference-defaults registry before the request is
+    sent. A name the registry does not know is passed through unchanged, so
+    the provider's own not-found error (exit 5) surfaces as before.
 - `driver` — optional. Only `emulated` exists. Anything else: the tool will
   not load.
 - `constraints` — optional list of hard rules appended to the tool's prompt.
 - `allow_roots` — optional list of directories the tool may read or write
   (see §5). `~/...` and `$ENVVAR` forms are expanded. No list = no file
   surface.
+  - **Runbook note (verified):** every `allow_roots` entry must be an
+    **existing directory at load time** — an entry pointing at a
+    nonexistent path fails the invocation at load-for-invoke with exit 3
+    (`... is not an existing directory`), not a lazy error at first use.
 
 **Unknown keys make the file invalid** (typos must not silently change
 behavior). The markdown body is the tool's persona and instructions — that is

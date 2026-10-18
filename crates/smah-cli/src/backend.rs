@@ -65,12 +65,75 @@ impl ChatBackend for ProviderBackend {
 /// provider key**; a bare id containing dots (e.g. `gpt-4.1-mini`) stays a
 /// bare id under the default provider. Unknown provider prefixes are a
 /// settings problem (`smah-providers` maps them to exit 3), not a parse one.
+///
+/// The provider-side model part is resolved through the embedded defaults
+/// catalog when it names a display name ("alibaba.Qwen 3.8 Flash" →
+/// `qwen3.8-flash`); anything else — a raw id, or a name the catalog does
+/// not know — passes through unchanged so the provider's own not-found
+/// error (exit 5) is unchanged.
 pub fn split_model_spec(spec: &str, default_provider: &str) -> (String, String) {
     if let Some((prefix, rest)) = spec.split_once('.') {
         let known = known_provider_keys();
         if !rest.is_empty() && known.contains(&prefix) {
-            return (prefix.to_string(), rest.to_string());
+            return (prefix.to_string(), resolve_model_id(prefix, rest));
         }
     }
     (default_provider.to_string(), spec.to_string())
+}
+
+/// Catalog resolution for the provider-side model part: a display name maps
+/// to its raw id; everything else is passed through as-is.
+fn resolve_model_id(provider_key: &str, model: &str) -> String {
+    smah_core::settings::resolve_display_model(provider_key, model)
+        .unwrap_or_else(|| model.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_name_resolves_through_the_registry() {
+        assert_eq!(
+            split_model_spec("alibaba.Qwen 3.8 Flash", "anthropic"),
+            ("alibaba".to_string(), "qwen3.8-flash".to_string())
+        );
+        assert_eq!(
+            split_model_spec("alibaba.qwen 3.8 FLASH", "anthropic"),
+            ("alibaba".to_string(), "qwen3.8-flash".to_string())
+        );
+    }
+
+    #[test]
+    fn raw_ids_pass_through_unchanged() {
+        assert_eq!(
+            split_model_spec("alibaba.qwen3.8-flash", "anthropic"),
+            ("alibaba".to_string(), "qwen3.8-flash".to_string())
+        );
+        assert_eq!(
+            split_model_spec("anthropic.claude-opus-5-5", "anthropic"),
+            ("anthropic".to_string(), "claude-opus-5-5".to_string())
+        );
+    }
+
+    #[test]
+    fn unknown_display_name_stays_raw() {
+        // The provider 404s on it (exit 5) — same as before, no new class.
+        assert_eq!(
+            split_model_spec("alibaba.Definitely Not A Model", "anthropic"),
+            ("alibaba".to_string(), "Definitely Not A Model".to_string())
+        );
+    }
+
+    #[test]
+    fn bare_ids_keep_the_default_provider_path() {
+        assert_eq!(
+            split_model_spec("gpt-4.1-mini", "anthropic"),
+            ("anthropic".to_string(), "gpt-4.1-mini".to_string())
+        );
+        assert_eq!(
+            split_model_spec("claude-opus-5-5", "anthropic"),
+            ("anthropic".to_string(), "claude-opus-5-5".to_string())
+        );
+    }
 }
