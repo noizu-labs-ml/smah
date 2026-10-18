@@ -86,3 +86,12 @@ snapshot suite, doctor mockup-shape tests.
 - interface-spec errata: §4 internal-error row → exit 1; §5.7 "today" note; §3.4 runtime header; §1 synopsis gains `resume --last`.
 - Docs: PROJ-ARCH/PROJ-LAYOUT/THREAT-MODEL updates as per approved plan (T-001/T-003 → mitigated; B5 → GitHub Releases; T-007 fixed via SHA-pinned actions).
 - Version **0.3.0**; epic → develop regular merge; monorepo gitlink bump after release reaches main.
+
+## Future (tracked, not this epic)
+
+**Virtual-tool family** — tickets #16–#25 (umbrella: #16 virtual-tool-prd; drivers: #17 cli,
+#18 tui, #19 web; interface-first emulators: #20 api, #21 grpc, #22 soap, #23 mcp; stateful:
+#24 db, #25 vfs). Gated on M3/M6/M7 landing; PRD must carry the threat-model section before
+any family implementation PR; five planning agents spawn at PRD sign-off. Cache/state split:
+`~/.cache/smah/virtual-tools/<tool>/` (regenerable artifacts) · `~/.local/state/smah/`
+(durable state).
