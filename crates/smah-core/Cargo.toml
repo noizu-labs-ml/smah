@@ -17,7 +17,17 @@ tracing-subscriber = { workspace = true }
 home = { workspace = true }
 # Local-time log-file names (`smah.<YYYYmmdd_HHMMSS>.log`)
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# The virtual-tools driver family presents through these leaf crates (the
+# frozen `--emulate` dispatch reaches tui/web/api via smah-core, so the
+# dependency direction is core -> presentation; see each crate's Cargo.toml).
+smah-tui = { path = "../smah-tui" }
+smah-vtool-http = { path = "../smah-vtool-http" }
+# tool.sha256 staleness markers for the virtual-tools contract caches (#20/#19)
+sha2 = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }
 tempfile = { workspace = true }
+# Real-model e2e tests only (env-gated, `#[ignore]`, never in CI):
+# builds an AlibabaProvider backend without runtime coupling.
+smah-providers = { path = "../smah-providers" }
