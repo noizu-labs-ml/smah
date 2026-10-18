@@ -8,6 +8,7 @@ CHANGE LOG
 October 18 2026
 
 - Rust workspace scaffold (M0): 4-crate cargo workspace (core/providers/tui/cli), ci-rs.yml, toolchain pinning.
+- Rust M2: smah-providers — hand-rolled Anthropic+OpenAI clients (blocking + SSE streaming), credential seams (CLI flag → settings `api_key`/`$ENV` → `SMAH_`/bare env chain), config-key registry, §4 error/exit translation table (#26).
 - Rust M1: smah-core domain — exit codes, §4 error templates (insta-snapshotted), redaction-layer logging (T-001 class fixed), Value-centric settings loader with vsn gate + $ENV indirection.
 - Added `docs/PROJ-LAYOUT.md` (+ `docs/PROJ-LAYOUT.summary.md`): navigable
   project-tree map; marks generated (`_autosummary`), symlinked, and
