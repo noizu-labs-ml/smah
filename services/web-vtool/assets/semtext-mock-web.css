@@ -1,0 +1,72 @@
+/* semtext-mock-web.css — minimal chrome for the smah web virtual tool page. */
+:root {
+  color-scheme: light dark;
+  --ink: #1c1c1e;
+  --paper: #fafafa;
+  --line: #d8d8dc;
+  --accent: #3b5bdb;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #ececf0;
+    --paper: #1a1a1e;
+    --line: #3a3a40;
+    --accent: #748ffc;
+  }
+}
+body {
+  margin: 0 auto;
+  max-width: 46rem;
+  padding: 1.5rem 1rem 4rem;
+  font: 16px/1.55 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+h1 {
+  font-size: 1.6rem;
+  margin: 0 0 0.25rem;
+}
+h2 {
+  font-size: 1.05rem;
+  text-transform: capitalize;
+  color: var(--accent);
+  margin: 0 0 0.35rem;
+}
+section {
+  border-top: 1px solid var(--line);
+  padding: 0.9rem 0;
+}
+p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.banner,
+.notice {
+  font-size: 0.85rem;
+  color: color-mix(in srgb, var(--ink) 62%, transparent);
+  margin: 0.35rem 0 0;
+}
+.notice {
+  color: #b45309;
+}
+header {
+  margin-bottom: 1.25rem;
+}
+#regen {
+  margin-top: 0.75rem;
+  font: inherit;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+#regen:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+#regen-status {
+  margin-left: 0.6rem;
+  font-size: 0.85rem;
+}

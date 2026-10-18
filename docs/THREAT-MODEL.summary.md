@@ -2,7 +2,8 @@
 
 Condensed reference extracted from [THREAT-MODEL.md](THREAT-MODEL.md); kept in sync.
 
-**Posture**: local-only, print-only CLI — no daemon/server/inbound surface.
+**Posture**: local-only, print-only CLI — no daemon/server/inbound surface
+beyond explicitly user-started loopback-only mock servers (B7).
 Crown jewels: provider API keys, session history + operator/system profile
 (`~/.smah/`), the host (protected by the print-only invariant). Only external
 boundary = egress to LLM APIs. Stale `docs/source/architecture.md` claims
@@ -11,9 +12,12 @@ RBAC/"SMAHRails" — **do not cite as mitigations; they don't exist.**
 **Boundaries**: B1 local host ↔ process/`~/.smah/` · B2 ↔ provider APIs (egress)
 · B3 model output ↔ parser/console/clipboard · B4 environment ↔ process ·
 B5 CI/CD ↔ PyPI · B6 model output ↔ virtual-tool file-surface executor + stdout
-gate (#17; print-only no longer fully separates model output from disk).
+gate (#17; print-only no longer fully separates model output from disk) ·
+B7 model-fabricated content ↔ loopback mock servers + browser page (#20/#19:
+loopback-only binds, escaped rendering, origin-checked regen/push; Rust
+drivers stay print-only — they write files, never execute).
 
-**Register (16)**: 5 mitigated · 5 partial · 3 open · 3 accepted.
+**Register (21)**: 10 mitigated · 5 partial · 3 open · 3 accepted.
 
 | ID | Sev | Item | Status |
 |----|-----|------|--------|
@@ -33,6 +37,11 @@ gate (#17; print-only no longer fully separates model output from disk).
 | T-014 | Low | Shell injection via hook snippets / shim names | Mitigated |
 | T-015 | Info | Audit-log tamper; metadata-only logging trade-offs | Partial |
 | T-016 | Low | Unbounded stdin / directive loops / oversized writes (token+disk cost) | Mitigated |
+| T-017 | Med | TUI chrome injection via fabricated content / `@@smah ui` payloads (#18) | Mitigated |
+| T-018 | Med | API-driver fabricated-response abuse: unbounded/garbage responses (#20) | Mitigated |
+| T-019 | High | Web-driver XSS / cross-origin `/regen`+`/push` abuse (#19) | Mitigated |
+| T-020 | Med | Loopback mock server accidentally exposed beyond the host (#20/#19) | Mitigated |
+| T-021 | Med | Driver cache poisoning (`openapi.json`/`content.json` served unvalidated) | Mitigated |
 
 **Key controls (verified)**: print-only test + CI grep gate (Rust gate
 amended to execution primitives only — `Command::new`/`process::Command`/
@@ -41,13 +50,20 @@ whitelisted-AST exec-if · keys never printed/never in DB · config cannot
 redirect endpoints · PyPI OIDC trusted publishing · virtual-tool B6 controls:
 directive scanner + stdout gate, canonicalized allowlist containment with
 abort-on-violation, metadata-only audit JSONL, strict tool schema + reserved
-names, driver-owned contract, `--no-fs` kill switch.
+names, driver-owned contract, `--no-fs` kill switch · virtual-tool B7
+controls: bind-address validation (loopback or refuse to start) with loud
+stderr disclosure, `html/template` + `textContent` rendering under CSP,
+loopback + same-origin gates on `/push` and `/regen`, sha-pinned
+validate-on-load caches, Go-service CI `os/exec` ban with positive-control
+self-test.
 
 **Residual**: local attacker reads all plaintext stores (accepted — same-account
 attacker is game over); user pastes a suggested command (accepted trade-off);
 provider-side retention of sensitive pipes (user's choice); unsigned tool
 files + TOCTOU window on the virtual-tool file surface (T-010/T-012 — read
-tools before installing, try `--no-fs` first).
+tools before installing, try `--no-fs` first); loopback mocks are deliberately
+convincing fabricated data (T-017..T-021 — never point a decision-making
+client at one).
 
 **Details**: [threats/attack-surface.md](threats/attack-surface.md) ·
 [threats/data-stores.md](threats/data-stores.md) ·
