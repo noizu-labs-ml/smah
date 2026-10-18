@@ -20,6 +20,7 @@ is the authoritative control inventory.
 - **B3** model output (untrusted) ↔ response parser, console, clipboard
 - **B4** environment ↔ process (env vars incl. SDK base-URL overrides, direnv)
 - **B5** CI/CD ↔ PyPI (release path)
+- **B6** model output (untrusted) ↔ virtual-tool driver file-surface executor + stdout gate (CLI driver only; the print-only invariant no longer fully separates model output from disk)
 
 ## Attack Surface
 
@@ -52,9 +53,17 @@ the PyPI package plus GitHub Actions release via Trusted Publishing.
 | T-007 | Low | Tampering (supply chain) | GitHub Actions pinned by moving tags (`checkout@v4`, `setup-python@v5`, `pypi-publish@release/v1`), not commit SHA | Open |
 | T-008 | Info | Repudiation | All queries/pipes/system profile sent to third-party providers that log server-side — inherent to the product | Accepted |
 | T-009 | Low | Denial of service / cost | Full pipe is sent to the answer call untruncated (planner truncates; answer does not) — large pipe = large token spend | Accepted |
+| T-010 | **High** | Elevation / Tampering | Malicious or tampered tool definition (`~/.config/smah/virtual-tools/*.md`, often copy-pasted from the internet) declares over-broad `allow_roots` or a hostile persona — the tool file is the new trust anchor | Partial (strict schema, root disclosure on stderr, `--no-fs`, driver-owned contract, metadata audit; no signing in v1 — docs: install only tools you trust) |
+| T-011 | **High** | Elevation | Prompt injection via piped stdin or `read`-returned content drives directive emission targeting paths outside `allow_roots` (e.g. `~/.ssh/authorized_keys`) | Mitigated (lexical `..` rejection, canonicalize + component-prefix containment, abort-on-violation exit 3, negative-test battery) |
+| T-012 | Medium | Elevation | Symlink escape: in-root symlink → outside target; final-component symlink on write; TOCTOU window between canonicalize and open | Partial (realpath containment; final-component symlink rejected on write/append; TOCTOU accepted+documented; `openat2 RESOLVE_BENEATH` noted as Linux-only future hardening) |
+| T-013 | Medium | Tampering | Directive-protocol abuse: sentinel lines leak to stdout and inject into downstream pipe consumers, or malformed directives confuse the driver | Mitigated (scanner intercepts all sentinel lines, malformed ⇒ abort; reserved-sentinel contract; scanner tests) |
+| T-014 | Low | Spoofing / Tampering | Hook snippet injection: crafted tool/file names injecting shell into `smah hooks zsh` output or shim files | Mitigated (name regex + reserved set; unquoted-but-validated emission; golden snapshots) |
+| T-015 | Info | Repudiation / Info disclosure | Audit log tamper; secrets leaking via logged paths/args; args+stdin egress to provider (inherent, cf. T-008) | Partial (metadata-only JSONL, contents never logged, 0700/0600, user-owned dir; no tamper-proofing v1) |
+| T-016 | Low | DoS / cost | Unbounded stdin, endless directive loops, oversized writes → token/disk spend (T-009's analog for virtual tools) | Mitigated (loud truncation cap, `TURNS_MAX=8`, per-directive + aggregate write caps) |
 
-**Coverage:** 1 mitigated · 2 partial · 3 open · 3 accepted. Open items have
-no tracker tickets yet — file issues before fixing (T-001 first).
+**Coverage:** 5 mitigated · 5 partial · 3 open · 3 accepted (16 items —
+T-001…T-016). Open items have no tracker tickets yet — file issues before
+fixing (T-001 first).
 
 → *Control details: [threats/data-stores.md](threats/data-stores.md) · [threats/supply-chain.md](threats/supply-chain.md)*
 
@@ -74,6 +83,15 @@ no tracker tickets yet — file issues before fixing (T-001 first).
   tampering cannot redirect traffic.
 - **PyPI release**: Trusted Publishing (OIDC), no long-lived tokens;
   tag↔version match gate.
+- **Virtual-tool file surface (B6, #17)**: directive scanner gates stdout
+  (all sentinel lines intercepted, malformed ⇒ abort exit 3); canonicalized
+  allowlist containment with component-prefix matching and abort-on-
+  violation; metadata-only audit JSONL (0700/0600, contents never logged);
+  strict tool-file schema (unknown-key hard fail) + reserved command-name
+  set; driver-owned operating contract (not author-editable); `--no-fs` kill
+  switch; amended Rust `no-shell-gate` still bans every execution primitive
+  (`Command::new` / `process::Command` / `process::spawn` — termination-only
+  `exit`/`ExitCode` allowed at the binary edge).
 
 ## Residual Risk
 
@@ -88,6 +106,11 @@ no tracker tickets yet — file issues before fixing (T-001 first).
 - **Provider-side data**: everything sent to Anthropic/OpenAI is outside
   SMAH's control (T-008); sensitive pipes should not be piped into smah
   until provider data-retention choices are explicit.
+- **Virtual tools (B6, T-010..T-016)**: tool files are unsigned — a hostile
+  `allow_roots` is as broad as the user installed it; the canonicalize→open
+  TOCTOU window is accepted for v1 (future: Linux `openat2 RESOLVE_BENEATH`).
+  Install only tools you have read; run new tools once with `--no-fs` and
+  watch the audit log.
 
 ## Grounding
 

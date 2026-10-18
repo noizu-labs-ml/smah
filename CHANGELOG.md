@@ -7,6 +7,7 @@ CHANGE LOG
 ### Unreleased
 October 18 2026
 
+- Rust #17: cli-virtual-tool — `smah --emulate-cli <tool>` driver: emulated CLI (argv+stdin → provider → streamed stdout, print-only; zero process-execution primitives), restricted file surface (`@@smah` directive protocol, canonicalized allow_roots containment, abort-on-violation, metadata-only audit JSONL, `--no-fs` kill switch), `smah tools list`, `smah hooks zsh|bash|envrc|shims`, V-series error/exit rows (0/2/3/4/5), SMAH_VIRTUAL_TOOLS_DIR test seam; ci-rs.yml no-shell-gate narrowed to execution primitives (termination-only exit allowed at the binary edge) with a positive-control self-test; `docs/ux/virtual-tools-cli-driver.md` driver spec; THREAT-MODEL B6 boundary + T-010…T-016 (summary synced). 151 tests green; clippy -D warnings clean.
 - Rust workspace scaffold (M0): 4-crate cargo workspace (core/providers/tui/cli), ci-rs.yml, toolchain pinning.
 - Rust M2: smah-providers — hand-rolled Anthropic+OpenAI clients (blocking + SSE streaming), credential seams (CLI flag → settings `api_key`/`$ENV` → `SMAH_`/bare env chain), config-key registry, §4 error/exit translation table (#26).
 - Rust M2: smah-providers — alibaba provider (DashScope compatible-mode, OpenAI-compatible) on a shared `openai_compat` core; `ALIBABA_BASE_URL` env seam; `SMAH_ALIBABA_API_KEY`/`ALIBABA_API_KEY` credential chain; qwen 3.8 flash catalog entry + env-gated real-endpoint smoke (virtual-tools e2e unblock).

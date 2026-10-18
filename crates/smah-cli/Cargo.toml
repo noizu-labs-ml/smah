@@ -11,6 +11,21 @@ repository.workspace = true
 smah-core = { path = "../smah-core" }
 smah-providers = { path = "../smah-providers" }
 smah-tui = { path = "../smah-tui" }
+clap = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+sha2 = { workspace = true }
+# hook-snippet timestamps (local time with offset, repo convention)
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+[dev-dependencies]
+# tokio::test for wiremock servers (providers own their runtimes; the CLI itself is blocking)
+tokio = { workspace = true }
+wiremock = { workspace = true }
+assert_cmd = { workspace = true }
+insta = { workspace = true }
+tempfile = { workspace = true }
+predicates = { workspace = true }
 
 [[bin]]
 name = "smah"
