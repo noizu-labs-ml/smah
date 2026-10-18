@@ -130,6 +130,11 @@ pub struct RunOutcome {
     pub turns: usize,
     /// Whether the run wrote anything to the file surface.
     pub wrote_files: bool,
+    /// The full conversation (invocation + each assistant turn with
+    /// directives stripped + result turns) — for the caller's transcript
+    /// cache. Directives are stripped from assistant turns; result turns
+    /// carry the `[FILE ...]`/`[OK ...]`/`[ERROR ...]` blocks verbatim.
+    pub messages: Vec<ChatMessage>,
 }
 
 /// Run one virtual tool to completion.
@@ -236,6 +241,7 @@ pub fn run_with_turns(
             return Ok(RunOutcome {
                 turns: turn,
                 wrote_files,
+                messages,
             });
         }
 
@@ -313,6 +319,7 @@ pub fn run_with_turns(
             return Ok(RunOutcome {
                 turns: turn,
                 wrote_files,
+                messages,
             });
         }
 

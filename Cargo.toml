@@ -38,6 +38,10 @@ pulldown-cmark = "0.13"
 md-5 = "0.11"
 # ~/.smah paths
 home = "0.5"
+# Run ids for the virtual-tools audit log (#17)
+uuid = { version = "1", features = ["v4"] }
+# tool.sha256 transcript marker for the virtual-tools cache (#17)
+sha2 = "0.10"
 # Logging + redaction writer (T-001 fix)
 tracing = "0.1"
 tracing-subscriber = "0.3"
