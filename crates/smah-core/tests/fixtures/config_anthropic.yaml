@@ -1,0 +1,40 @@
+vsn: 0.0.1
+user:
+  vsn: 0.0.1
+  name: Keith
+  system_admin_experience: expert
+  role: sysadmin
+  about: Runs a homelab on noizu.com.
+system:
+  vsn: 0.0.1
+  shell: /bin/zsh
+  operating_system:
+    kind: Darwin (macOs)
+    name: macOS
+    version: 15.3
+    release: 24D60
+inference:
+  vsn: 0.0.1
+  instructions: Be terse.
+  model_picker:
+    default:
+    - anthropic.claude-haiku-5-5
+    query:
+    - anthropic.claude-haiku-5-5
+  providers:
+    anthropic:
+      name: Anthropic
+      description: Anthropic Claude Models
+      enabled: true
+      vsn: 0.0.1
+      settings:
+        api_key: $ANTHROPIC_API_KEY
+      models:
+      - name: claude-haiku-5-5
+        model: claude-haiku-5-5
+        description: Fast default for query and pipe
+        enabled: true
+      - name: claude-opus-5-5
+        model: claude-opus-5-5
+        description: Flagship for demanding work
+        enabled: true

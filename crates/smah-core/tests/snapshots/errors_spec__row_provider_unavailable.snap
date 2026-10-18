@@ -1,0 +1,5 @@
+---
+source: crates/smah-core/tests/errors_spec.rs
+expression: error.render(LOG)
+---
+smah: provider "anthropic" is failing (HTTP 503). Try again shortly, or 'smah models use <alt>' to switch. Full log: /home/tester/.smah/logs/smah.20260101_000000.log.
