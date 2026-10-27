@@ -1,5 +1,7 @@
 # Threat Model — smah
 
+<!-- 〚📁:0976ac04-51ab-5663-9d6f-13d841036439〛 THREAT-MODEL :: Living STRIDE threat model — trust boundaries, vulnerability register, controls, residual risk. -->
+
 ## Overview
 
 SMAH is a **local-only, print-only CLI**: no daemon, no server, no inbound
