@@ -1,6 +1,8 @@
 CHANGE LOG
 ==============
 
+## 2026-10-28
+- docs: add AGENT-README.md (agent orientation)
 
 ## Changes
 
