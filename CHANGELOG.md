@@ -5,6 +5,16 @@ CHANGE LOG
 ## Changes
 
 ### Unreleased
+October 27 2026
+
+- Doc sweep: `docs/PROJ-LAYOUT.md` (+ summary) and `docs/PROJ-ARCH.md`
+  (+ summary) now cover the Rust workspace scaffold (`crates/*`,
+  `ci-rs.yml`, `rust-toolchain.toml`) alongside the Python CLI; added
+  `docs/PROJ-SCHEMA.md` (+ `.summary.md`) documenting the SQLite session
+  store, checksummed migration runner, and non-relational config/contract
+  schemas; THREAT-MODEL T-007 updated (Rust CI actions SHA-pinned, Python
+  `ci.yml`/`release.yml` still tag-pinned).
+
 October 18 2026
 
 - Rust workspace scaffold (M0): 4-crate cargo workspace (core/providers/tui/cli), ci-rs.yml, toolchain pinning.

@@ -15,12 +15,18 @@ smah/
 │   ├── providers/       #   LLM providers: anthropic, openai, registry
 │   ├── runner/          #   prompt/response pipeline
 │   └── settings/        #   layered settings + config discovery
+├── crates/              # Rust workspace — TUI rewrite scaffold (M0)
+│   ├── smah-cli/        #   clap tree + `smah` binary
+│   ├── smah-core/       #   UI-agnostic domain core
+│   ├── smah-providers/  #   provider trait + hand-rolled clients, SSE
+│   └── smah-tui/        #   ratatui app + TTY-gated surfaces
 ├── tests/               # pytest suite (flat)
-├── docs/                # Sphinx (source/) + UX specs (ux/) + layout/arch/threat docs
+├── docs/                # Sphinx (source/) + UX specs (ux/) + layout/arch/schema/threat docs
 │   └── source/code/_autosummary/   # GENERATED
-├── .github/workflows/   # ci.yml (pytest), release.yml (PyPI OIDC)
+├── .github/workflows/   # ci.yml (pytest) · ci-rs.yml (Rust + no-shell-gate) · release.yml (PyPI OIDC)
 ├── pyproject.toml       # Poetry; console scripts smah, smah-db
 ├── poetry.lock
+├── Cargo.toml / Cargo.lock / rust-toolchain.toml   # cargo workspace, stable channel, MSRV 1.82
 ├── README.md / CHANGELOG.md / CONTRIBUTING.md / TODO.md / LICENSE (MIT)
 ├── .envrc               # sources .envrc.secret / .envrc.dev (local setup)
 └── .readthedocs.yaml    # smah.readthedocs.io

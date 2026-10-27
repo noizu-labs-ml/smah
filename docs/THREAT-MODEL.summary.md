@@ -22,7 +22,7 @@ B5 CI/CD ↔ PyPI.
 | T-004 | Med | Prompt injection via pipe → suggested commands (execution test+CI contained) | Mitigated |
 | T-005 | Low | SDK `*_BASE_URL` env override can redirect key+traffic | Accepted |
 | T-006 | Low | lxml defaults relied on implicitly for untrusted XML | Partial |
-| T-007 | Low | GH Actions tag-pinned, not SHA | Open |
+| T-007 | Low | GH Actions tag-pinned, not SHA (Python `ci.yml`/`release.yml`; Rust `ci-rs.yml` is SHA-pinned) | Open |
 | T-008 | Info | Provider-side logging of all sent data | Accepted |
 | T-009 | Low | Full pipe untruncated to answer call (token cost) | Accepted |
 

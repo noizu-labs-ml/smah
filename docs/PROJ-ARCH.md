@@ -12,7 +12,10 @@ SMAH is deliberately **local-only**: no daemon, no server, no central
 database. Everything it needs lives under `~/.smah/` — one YAML config, one
 SQLite session store, rotating log files. First run is guided by
 `smah config` (TTY wizard); unconfigured runs exit `3` with guidance rather
-than crash.
+than crash. A **Rust port** (4-crate Cargo workspace) is scaffolded for the
+terminal-UI rewrite — structure, CI gates, and dependency choices are in
+place; implementation is milestone-gated and runs alongside the Python CLI
+until cutover.
 
 → *Components ↔ directories: see [PROJ-LAYOUT.md](PROJ-LAYOUT.md)*
 → *Command surface (normative UX contract): [ux/interface-spec.md](ux/interface-spec.md)*
@@ -56,6 +59,7 @@ REPL. All errors funnel to the shared exit-code table.
 | `commands/` | `config`, `doctor`, `models`, `history` subcommands |
 | `logs/` | Rotating DEBUG file log + WARN-to-stderr console stream |
 | `exit_codes.py` | Single source of truth for the exit-code table |
+| `crates/*` (Rust) | Rewrite scaffold: `smah-cli` (clap tree, `smah` bin) · `smah-core` (UI-agnostic domain) · `smah-providers` (hand-rolled clients, SSE) · `smah-tui` (ratatui) |
 
 ## Model Selection & Providers
 
@@ -116,6 +120,21 @@ scaffold). Migration tracking is checksummed (`schema_migrations`).
 | 4 | Auth / no usable model (no API key, zero enabled models) |
 | 5 | Provider or API error (4xx/5xx, network, unparseable plan) |
 
+## Rust Workspace — Rewrite in Flight
+
+`crates/*` is a Cargo workspace (edition 2021, MSRV 1.82, stable toolchain via
+`rust-toolchain.toml`) scaffolding the TUI rewrite. Crate layering is strict:
+`smah-core` (settings, runner, parser, db, console — UI-agnostic, zero
+I/O-framework deps) ← `smah-providers` (trait, registry, hand-rolled
+Anthropic/OpenAI clients on `reqwest` with **rustls only**, SSE parsing) and
+`smah-tui` (ratatui/crossterm) ← `smah-cli` (clap derive; the `smah` binary).
+Parity goals carried over from the Python tree: MD5-checksummed migration
+runner (`md-5`), Python-format YAML config (`serde_yaml_ng` +
+`preserve_order`), and the print-only invariant — system facts come from
+`sysinfo` (no subprocess) and `ci-rs.yml` gates a grep for
+`Command::new`/`process::spawn`/`std::process`. Crate sources are M0 stubs;
+the gate and the layering are the architecture that persists.
+
 ## Known Gaps & Stale Spots
 
 - `docs/source/architecture.md` is a **stale aspirational draft** (predates
@@ -148,3 +167,7 @@ Python ≥3.10 (CI matrix 3.10/3.12/3.13) · Poetry · `rich` (console) ·
 `lxml` + `cssselect` (response parsing) · pytest · Sphinx/ReadTheDocs
 (`smah.readthedocs.io`) · GitHub Actions (pytest CI, PyPI Trusted Publishing
 on `v*` tags).
+Rust (scaffold): edition 2021, MSRV 1.82 · tokio · clap 4 (derive) ·
+ratatui/crossterm · reqwest (rustls) · rusqlite (bundled SQLite) ·
+serde/serde_json/serde_yaml_ng · sysinfo · md-5 · pulldown-cmark ·
+cargo fmt/clippy/test CI on linux+macos (`ci-rs.yml`).
