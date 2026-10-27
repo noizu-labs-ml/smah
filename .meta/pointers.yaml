@@ -1,0 +1,122 @@
+---
+pointers:
+  0976ac04-51ab-5663-9d6f-13d841036439:
+    created_at: 2026-10-27T05:16:07.626585Z
+    description: Living STRIDE threat model — trust boundaries, vulnerability register, controls, residual risk.
+    file_path: docs/THREAT-MODEL.md
+    function: THREAT-MODEL
+    kind: file
+    line: 3
+    locations:
+      - file_path: docs/THREAT-MODEL.md
+        line: 3
+    token: 𔍓𓁰𔃗𔌹
+    updated_at: 2026-10-27T05:16:07.626585Z
+  19cad20d-1e24-5421-be1c-acb4362ae8c6:
+    created_at: 2026-10-27T05:16:07.626543Z
+    description: Project entry point — purpose, install, command surface, config example, and roadmap.
+    file_path: README.md
+    function: SMAH README
+    kind: file
+    line: 4
+    locations:
+      - file_path: README.md
+        line: 4
+    token: 𓁃𓄈𓤐𓂦
+    updated_at: 2026-10-27T05:16:07.626543Z
+  2098396f-6cf6-5394-81e7-1e1b07a52333:
+    created_at: 2026-10-27T05:16:07.626578Z
+    description: Provider layer — trait, registry, hand-rolled Anthropic/OpenAI clients, SSE.
+    file_path: crates/smah-providers/src/lib.rs
+    function: smah-providers
+    kind: file
+    line: 1
+    locations:
+      - file_path: crates/smah-providers/src/lib.rs
+        line: 1
+    token: 𓰜𔑠𓽫𓥳
+    updated_at: 2026-10-27T05:16:07.626578Z
+  453837ac-f3d1-5247-95ec-e5c954bd2238:
+    created_at: 2026-10-27T05:16:07.626574Z
+    description: UI-agnostic domain core — settings, runner, parser, db, console.
+    file_path: crates/smah-core/src/lib.rs
+    function: smah-core
+    kind: file
+    line: 1
+    locations:
+      - file_path: crates/smah-core/src/lib.rs
+        line: 1
+    token: 𓧥𓾵𓖺𓛨
+    updated_at: 2026-10-27T05:16:07.626574Z
+  49558d29-c6e4-5c91-a3bb-477741745b5c:
+    created_at: 2026-10-27T05:16:07.626558Z
+    description: SMAH CLI binary — clap command tree, dispatch, and the smah/smah-db entrypoints.
+    file_path: crates/smah-cli/src/main.rs
+    function: smah-cli
+    kind: file
+    line: 1
+    locations:
+      - file_path: crates/smah-cli/src/main.rs
+        line: 1
+    token: 𓃹𓯆𔉋𓦜
+    updated_at: 2026-10-27T05:16:07.626558Z
+  7c62193e-540b-5b3c-9f54-408955af1a67:
+    created_at: 2026-10-27T05:16:07.626562Z
+    description: Data-schema reference — SQLite store, migration runner, config and contract schemas.
+    file_path: docs/PROJ-SCHEMA.md
+    function: PROJ-SCHEMA
+    kind: file
+    line: 3
+    locations:
+      - file_path: docs/PROJ-SCHEMA.md
+        line: 3
+    token: 𓎊𔕾𓧶𔏗
+    updated_at: 2026-10-27T05:16:07.626562Z
+  986ed411-6cdf-5487-a507-e27958c127d4:
+    created_at: 2026-10-27T05:16:07.626588Z
+    description: Normative CLI/UX contract — command surface, stdout/stderr split, exit codes.
+    file_path: docs/ux/interface-spec.md
+    function: Interface Spec
+    kind: file
+    line: 3
+    locations:
+      - file_path: docs/ux/interface-spec.md
+        line: 3
+    token: 𔏧𓼽𔏅𓶴
+    updated_at: 2026-10-27T05:16:07.626588Z
+  a31ed764-b260-5073-857b-6c396d4312d2:
+    created_at: 2026-10-27T05:16:07.626594Z
+    description: Terminal UI — ratatui app, widgets, event loop, TTY-gated surfaces.
+    file_path: crates/smah-tui/src/lib.rs
+    function: smah-tui
+    kind: file
+    line: 1
+    locations:
+      - file_path: crates/smah-tui/src/lib.rs
+        line: 1
+    token: 𔑫𓌺𓓱𔁲
+    updated_at: 2026-10-27T05:16:07.626594Z
+  c5223f0f-4672-5545-8975-a290dc8d8eab:
+    created_at: 2026-10-27T05:16:07.626565Z
+    description: Navigable repo tree with one-line per-path descriptions and path classes.
+    file_path: docs/PROJ-LAYOUT.md
+    function: PROJ-LAYOUT
+    kind: file
+    line: 3
+    locations:
+      - file_path: docs/PROJ-LAYOUT.md
+        line: 3
+    token: 𓜀𓬘𓞣𔑫
+    updated_at: 2026-10-27T05:16:07.626565Z
+  d9aa2003-0e67-552a-87d9-32b01fbb45dc:
+    created_at: 2026-10-27T05:16:07.626581Z
+    description: High-level architecture — pipeline, providers, safety model, output contract, exit codes.
+    file_path: docs/PROJ-ARCH.md
+    function: PROJ-ARCH
+    kind: file
+    line: 3
+    locations:
+      - file_path: docs/PROJ-ARCH.md
+        line: 3
+    token: 𔂸𓬅𓝚𔒌
+    updated_at: 2026-10-27T05:16:07.626581Z

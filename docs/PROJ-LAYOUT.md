@@ -1,5 +1,7 @@
 # Project Layout — smah
 
+<!-- 〚📁:c5223f0f-4672-5545-8975-a290dc8d8eab〛 PROJ-LAYOUT :: Navigable repo tree with one-line per-path descriptions and path classes. -->
+
 Navigable map of the repository. One-line descriptions; generated, symlinked,
 and gitignored paths are marked. Stack: Python ≥3.10 CLI (Poetry packaging,
 pytest, Sphinx/ReadTheDocs docs) plus a **Rust workspace scaffold**

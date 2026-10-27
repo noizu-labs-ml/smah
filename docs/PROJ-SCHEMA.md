@@ -1,5 +1,7 @@
 # Project Schema — smah
 
+<!-- 〚📁:7c62193e-540b-5b3c-9f54-408955af1a67〛 PROJ-SCHEMA :: Data-schema reference — SQLite store, migration runner, config and contract schemas. -->
+
 Data-schema reference for SMAH: the persistence layer plus every other
 structured-data surface in the repo. SMAH is **local-only** — the single
 relational store is a **SQLite** session database at `~/.smah/smah.db`

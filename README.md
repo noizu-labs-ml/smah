@@ -1,6 +1,7 @@
 README
 ======
 
+<!-- 〚📁:19cad20d-1e24-5421-be1c-acb4362ae8c6〛 SMAH README :: Project entry point — purpose, install, command surface, config example, and roadmap. -->
 
 [documentation](https://smah.readthedocs.io/en/latest/)
 

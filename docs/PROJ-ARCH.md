@@ -1,5 +1,7 @@
 # Project Architecture — smah
 
+<!-- 〚📁:d9aa2003-0e67-552a-87d9-32b01fbb45dc〛 PROJ-ARCH :: High-level architecture — pipeline, providers, safety model, output contract, exit codes. -->
+
 ## Overview
 
 SMAH is a **print-only sysadmin CLI**: it turns plain-language questions into
