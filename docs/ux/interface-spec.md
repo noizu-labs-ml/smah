@@ -352,9 +352,14 @@ Exact user-facing text (single line each, stderr). `<provider>` is the active pr
 | Provider 4xx (non-auth) | `smah: provider "<provider>" rejected the request (HTTP <code>): <detail>. Check model ids with 'smah models list'.` | 5 |
 | Provider 5xx | `smah: provider "<provider>" is failing (HTTP <code>). Try again shortly, or 'smah models use <alt>' to switch.` | 5 |
 | Network failure / timeout | `smah: can't reach provider "<provider>" (<detail>). Check network/DNS, then retry.` | 5 |
-| Unexpected internal error | `smah: internal error: <detail>. Full traceback in <logfile>. Please file an issue.` | 5 |
+| Unexpected internal error | `smah: internal error: <detail>. Full traceback in <logfile>. Please file an issue.` | 1 |
 
 This replaces today's behavior where every failure class above is swallowed by the broad except at `smah/smah.py:175-176` and the process exits 0 silently.
+
+> **Erratum (rust-ask, owner-approved 2026-11-09):** the internal-error row
+> above originally read `5`. The footer note and the exit-code table's own
+> ordering agree the internal class is **1** (plan correction 1, encoded in
+> `crates/smah-core/src/exit_codes.rs`); the row is corrected here.
 
 ---
 
