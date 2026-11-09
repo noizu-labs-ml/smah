@@ -1,6 +1,9 @@
 CHANGE LOG
 ==============
 
+## 2026-11-09
+- retire PyPI release lane: .github/workflows/release.yml deleted (PyPI Trusted Publishing on v* tags) — Python package on PyPI frozen at 0.2.0, deprecated, NOT yanked; README deprecation note, Installation now leads with `cargo install --git https://github.com/noizu-labs-ml/smah smah-cli` (Rust toolchain, MSRV 1.82); PROJ-LAYOUT + THREAT-MODEL T-007 mentions synced (#37).
+
 ## 2026-10-28
 - docs: add AGENT-README.md (agent orientation)
 
