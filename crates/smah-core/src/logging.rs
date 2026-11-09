@@ -72,6 +72,16 @@ pub fn register_replacement(secret: impl Into<String>, replacement: &'static str
     }
 }
 
+/// Test seam: whether a secret is currently registered (F7/F2 assertions).
+/// Pure registry read — never logs, never exposes other secrets.
+#[doc(hidden)]
+pub fn is_registered(secret: &str) -> bool {
+    registry()
+        .read()
+        .map(|reg| reg.iter().any(|(needle, _)| needle == secret))
+        .unwrap_or(false)
+}
+
 /// Rewrite every registered substring in `input` (secrets → `***`).
 pub fn redact(input: &str) -> String {
     match registry().read() {

@@ -90,6 +90,11 @@ impl SessionStore {
             std::fs::create_dir_all(parent)
                 .map_err(|err| db_error(path, format!("cannot create dir: {err}")))?;
         }
+        // F6: the session database holds the full conversation history —
+        // create it owner-only (0600) when new; an existing file's mode is
+        // left alone (SQLite may already have it open).
+        smah_core::secrets::create_private_file(path)
+            .map_err(|err| db_error(path, format!("cannot create private file: {err}")))?;
         let conn = Connection::open(path).map_err(|err| db_error(path, err.to_string()))?;
         conn.execute_batch(SCHEMA)
             .map_err(|err| db_error(path, err.to_string()))?;

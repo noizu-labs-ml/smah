@@ -75,8 +75,19 @@ fn run_chat_inner(cli: &Cli, query: &[String]) -> Result<i32, SmahError> {
         session,
         edit_dir: &edit_dir,
     };
-    let outcome = loop_.start(&mut io, &mut history, &question)?;
-    loop_.key_loop(&mut io, &mut history, outcome)?;
+    // F5: an error here still leaves the session resumable — the footer
+    // names the id on every exit, error exits included.
+    let outcome = match loop_.start(&mut io, &mut history, &question) {
+        Ok(outcome) => outcome,
+        Err(e) => {
+            io.err(&smah_ask::resume_footer(session));
+            return Err(e);
+        }
+    };
+    if let Err(e) = loop_.key_loop(&mut io, &mut history, outcome) {
+        io.err(&smah_ask::resume_footer(session));
+        return Err(e);
+    }
     Ok(0)
 }
 
@@ -121,7 +132,7 @@ fn run_resume_inner(cli: &Cli, last: bool, id: Option<i64>) -> Result<i32, SmahE
     let history = store.load_session(session)?;
     let edit_dir = edit_dir();
     let mut io = ConsoleLoopIo::new();
-    io.out_line(&format!(
+    io.err(&format!(
         "resuming session {session} — {} messages",
         history.len()
     ));
@@ -141,14 +152,26 @@ fn run_resume_inner(cli: &Cli, last: bool, id: Option<i64>) -> Result<i32, SmahE
             io.err(&smah_ask::resume_footer(session));
             return Ok(0);
         }
-        let outcome = loop_.start(&mut io, &mut history, first.trim())?;
-        loop_.key_loop(&mut io, &mut history, outcome)?;
+        let outcome = match loop_.start(&mut io, &mut history, first.trim()) {
+            Ok(outcome) => outcome,
+            Err(e) => {
+                io.err(&smah_ask::resume_footer(session));
+                return Err(e);
+            }
+        };
+        if let Err(e) = loop_.key_loop(&mut io, &mut history, outcome) {
+            io.err(&smah_ask::resume_footer(session));
+            return Err(e);
+        }
         return Ok(0);
     }
     let outcome = outcome_from_history(&history).ok_or_else(|| SmahError::Internal {
         detail: "resumed session has no assistant message".to_string(),
     })?;
-    loop_.key_loop(&mut io, &mut history, outcome)?;
+    if let Err(e) = loop_.key_loop(&mut io, &mut history, outcome) {
+        io.err(&smah_ask::resume_footer(session));
+        return Err(e);
+    }
     Ok(0)
 }
 

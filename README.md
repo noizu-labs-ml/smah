@@ -89,6 +89,29 @@ Every suggested command is printed for you to run yourself — smah is
 print-only and never executes anything it proposes (see
 [THREAT-MODEL.md](THREAT-MODEL.md)).
 
+## Where your API key lives
+
+`smah config init` never writes a literal key into `config.yaml`. The key
+goes to the best secret store available on your OS and the config keeps a
+reference only:
+
+| OS | default store |
+|----|---------------|
+| macOS | Keychain (`keychain:smah/<provider>`) |
+| Windows | Credential Manager (`keychain:smah/<provider>`) |
+| Linux / BSD | Secret Service over D-Bus — pure-Rust zbus, no libdbus, no subprocesses; headless (no session bus) falls back to `~/.smah/secrets.yaml` (created `0600`, atomic writes, loud notice) |
+
+Pick the destination explicitly with `smah config init --secret-store
+keychain|file|env` (`env` keeps an `env:VAR` reference for headless
+setups — pair it with `--key-env`). At run time the environment chain
+(`SMAH_<PROVIDER>_API_KEY`, then `<PROVIDER>_API_KEY`) overrides any stored
+reference, and every resolved key is registered with the log redactor so
+debug output stays masked.
+
+Already have a literal in your config? `smah doctor` warns about it, and
+`smah config migrate-secrets` moves it into the store and rewrites the
+config to hold a reference.
+
 ## Commands
 
 ```

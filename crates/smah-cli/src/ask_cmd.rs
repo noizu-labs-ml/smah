@@ -8,7 +8,9 @@
 //! diagnostics (the standing non-execution notice, truncation, errors) go
 //! to stderr. Print-only: nothing here executes anything.
 
-use std::io::{IsTerminal, Read, Write};
+use std::io::{IsTerminal, Write};
+
+use crate::pipe::read_stdin;
 use std::path::PathBuf;
 
 use smah_ask::{
@@ -290,51 +292,5 @@ impl AskBackend for ProviderAskBackend {
             .collect::<Vec<_>>();
         self.inner
             .stream_turn(&self.model_id, system, &wire, on_delta)
-    }
-}
-
-/// Capped stdin read (same semantics as the emulate path): `None` piped
-/// text on a TTY (never read); `Some((sent, total))` truncation when the
-/// pipe exceeded the cap.
-fn read_stdin(cap: usize, is_tty: bool) -> (Option<String>, Option<(usize, usize)>) {
-    if is_tty {
-        return (None, None);
-    }
-    let mut stdin = std::io::stdin().lock();
-    let (text, total) = read_stdin_from(&mut stdin, cap);
-    let truncation = (total > cap).then_some((text.len(), total));
-    (Some(text), truncation)
-}
-
-/// Capped read of an arbitrary reader: (lossy-decoded capped text,
-/// uncapped byte total).
-fn read_stdin_from<R: Read>(reader: &mut R, cap: usize) -> (String, usize) {
-    let mut raw = Vec::new();
-    if reader.read_to_end(&mut raw).is_err() {
-        return (String::new(), 0);
-    }
-    let total = raw.len();
-    raw.truncate(cap);
-    (String::from_utf8_lossy(&raw).to_string(), total)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn capped_read_reports_total() {
-        let mut data = std::io::Cursor::new(b"0123456789".to_vec());
-        let (text, total) = read_stdin_from(&mut data, 4);
-        assert_eq!(text, "0123");
-        assert_eq!(total, 10);
-    }
-
-    #[test]
-    fn under_cap_read_is_whole() {
-        let mut data = std::io::Cursor::new(b"hi".to_vec());
-        let (text, total) = read_stdin_from(&mut data, 16);
-        assert_eq!(text, "hi");
-        assert_eq!(total, 2);
     }
 }

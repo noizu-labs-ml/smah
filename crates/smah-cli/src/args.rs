@@ -160,7 +160,27 @@ pub struct DoctorArgs {
 pub enum ConfigSubCommand {
     /// Guided first-run setup: provider + API key (masked), profile,
     /// data-egress toggles. Non-interactive (or non-TTY) uses flags/env.
+    /// The key is stored in a secret store (OS keychain / credential
+    /// manager / Secret Service, a 0600 secrets file, or an env reference);
+    /// config.yaml keeps a reference only.
     Init(ConfigInitArgs),
+    /// Move literal API keys out of config.yaml into the secret store
+    /// (keychain or the 0600 secrets file), rewriting the config to hold
+    /// references. `smah doctor` names this when it finds a literal.
+    MigrateSecrets(ConfigMigrateArgs),
+}
+
+/// `smah config migrate-secrets` arguments (RA-10 F2).
+#[derive(clap::Args, Debug)]
+pub struct ConfigMigrateArgs {
+    /// Destination store: keychain (OS store) or file (0600 secrets.yaml
+    /// beside the config). Default: best available.
+    #[arg(long, value_name = "STORE")]
+    pub secret_store: Option<String>,
+
+    /// Config override (same as the global -c).
+    #[arg(long, value_name = "PATH")]
+    pub config_path: Option<PathBuf>,
 }
 
 /// `smah config init` arguments (RA-06).
@@ -174,6 +194,14 @@ pub struct ConfigInitArgs {
     /// headless setups; VAR must be set at run time.
     #[arg(long, value_name = "VAR")]
     pub key_env: Option<String>,
+
+    /// Where the API key lives: `keychain` (OS keychain / credential
+    /// manager / Secret Service), `file` (0600 secrets.yaml beside the
+    /// config), or `env` (a reference; pair with --key-env). Default: best
+    /// available — the OS store, falling back to the file when none is
+    /// reachable (headless Linux without a D-Bus session bus).
+    #[arg(long, value_name = "STORE")]
+    pub secret_store: Option<String>,
 
     /// No prompts: flags/env only (implied when stdin is not a TTY).
     #[arg(long)]
