@@ -49,24 +49,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0 (SHA-pinned, T-007)
-      - name: No shell execution (print-only invariant)
+      - name: No shell execution (print-only invariant; smah-run exempt)
         run: |
-          # Execution-primitive ban, narrowed 2026-10-18 (#17): the old
-          # 'std::process' term banned even std::process::exit/ExitCode,
-          # which the binary edge needs for the six-class exit table
-          # (interface-spec §4). The pattern now matches every execution
-          # shape — any Command::new, any process::Command import, any
-          # spawn call — while allowing termination-only exit/ExitCode.
-          if grep -rnE 'Command::new|process::Command|process::spawn' crates/*/src; then
-            echo "::error::Process/shell execution primitive found in crates/*/src. SMAH is print-only."
-            exit 1
-          fi
-          echo "OK: no shell-execution primitives in the Rust tree."
-      - name: Gate self-test (pattern must still catch execution primitives)
+          # SW-05 (owner decision 2026-11-09): the single source of truth is
+          # scripts/no-shell-gate.sh — every crate stays gated except the
+          # companion executor crates/smah-run/src (exact path). The
+          # pattern itself is unchanged (any Command::new, any
+          # process::Command, any spawn path; exit/ExitCode stay legal).
+          sh scripts/no-shell-gate.sh .
+          echo "OK: no shell-execution primitives outside crates/smah-run/src."
+      - name: Gate self-test (gated fails, smah-run passes, lookalike fails)
         run: |
-          # Positive control: the amended pattern MUST match the canonical
-          # offender shapes (and each of its three terms), or the gate is
-          # silently weaker than intended. Never compiled — grep fixture only.
+          # Positive controls, both directions: the canonical offender under
+          # a GATED crate must FAIL the gate; the same offender under
+          # crates/smah-run/src must PASS; a lookalike crate name
+          # (smah-runner) must FAIL — the exemption is scoped to the exact
+          # path, not a substring. Never compiled — grep fixtures only.
           cat > /tmp/offender.rs <<'EOF'
           use std::process::Command;
           fn main() {
@@ -79,8 +77,24 @@ jobs:
           // process::spawn — the spawn-call path
           let _term3 = process::spawn;
           EOF
+          mkdir -p /tmp/gw-gated/crates/smah-core/src /tmp/gw-runner/crates/smah-run/src /tmp/gw-lookalike/crates/smah-runner/src
+          cp /tmp/offender.rs /tmp/gw-gated/crates/smah-core/src/lib.rs
+          cp /tmp/offender.rs /tmp/gw-runner/crates/smah-run/src/main.rs
+          cp /tmp/offender.rs /tmp/gw-lookalike/crates/smah-runner/src/lib.rs
+          if sh scripts/no-shell-gate.sh /tmp/gw-gated; then
+            echo "::error::self-test: a gated crate with the canonical offender passed the gate."
+            exit 1
+          fi
+          if ! sh scripts/no-shell-gate.sh /tmp/gw-runner; then
+            echo "::error::self-test: the crates/smah-run/src exemption is broken."
+            exit 1
+          fi
+          if sh scripts/no-shell-gate.sh /tmp/gw-lookalike; then
+            echo "::error::self-test: a lookalike crate name inherited the exemption."
+            exit 1
+          fi
           if ! grep -qE 'Command::new' /tmp/offender.rs || ! grep -qE 'process::Command' /tmp/offender.rs || ! grep -qE 'process::spawn' /tmp/offender.rs; then
             echo "::error::no-shell-gate pattern failed its self-test: an execution primitive escaped the match."
             exit 1
           fi
-          echo "OK: self-test — all three terms still catch the canonical execution shapes."
+          echo "OK: self-test — gated crate fails, smah-run passes, lookalike fails, all three terms still match."

@@ -1,0 +1,30 @@
+[package]
+name = "smah-run"
+version = "0.0.0"
+description = "SMAH wrapper executor: the only workspace crate allowed to spawn processes. Dry-run by default; --execute runs saved, user-approved wrappers with fixed argv (never a shell)."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+smah-core = { path = "../smah-core" }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+# Approval/audit timestamps (local time with offset, repo convention).
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# Process-group signalling on timeout (H1): SIGTERM/SIGKILL to the whole
+# group of a step spawned via process_group(0). Unix-only dependency.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+assert_cmd = { workspace = true }
+predicates = { workspace = true }
+tempfile = { workspace = true }
+
+[[bin]]
+name = "smah-run"
+path = "src/main.rs"
