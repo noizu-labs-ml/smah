@@ -2,6 +2,7 @@ CHANGE LOG
 ==============
 
 ## 2026-11-09
+- docs(plans): add mallm fold-in plan — phased Rust port of mallm into a `smah-docs` crate + `smah docs` subcommand, with the help-capture exec question flagged as an owner decision (`docs/plans/mallm-fold.md`)
 - epic: Rust port (rust-tui) → develop — origin/develop merged into epic.rust-tui (doc-pointer headers kept both sides); full Rust CLI verified locally: cargo build clean, 332 tests green (8 ignored), clippy -D warnings + fmt clean, Rust+Python no-shell gates green, Python pytest 200 green; cargo install → bins smah, smah_db (#36). Merges REGULAR, not squash.
 
 ## 2026-10-28
