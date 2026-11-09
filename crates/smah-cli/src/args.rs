@@ -126,6 +126,17 @@ pub enum Command {
         #[command(subcommand)]
         cmd: HooksCommand,
     },
+    /// Provider/config health check (RA-07): no network calls, no key
+    /// material shown — presence only.
+    Doctor(DoctorArgs),
+}
+
+/// `smah doctor` flags.
+#[derive(clap::Args, Debug)]
+pub struct DoctorArgs {
+    /// Emit machine-readable JSON on stdout instead of the human report.
+    #[arg(long)]
+    pub json: bool,
 }
 
 /// `smah config ...` verbs.
