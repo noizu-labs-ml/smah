@@ -11,7 +11,8 @@
 //!
 //! Modules:
 //! - [`loader`]: parse/validate/discover `~/.config/smah/wrappers/*.md`
-//! - [`builtin`] (SW-04): the compiled-in tool registry (`cast-to-text`)
+//! - [`cast`]: asciinema v2 `.cast` parsing + ANSI stripping (pure Rust)
+//! - [`builtin`]: the compiled-in tool registry (`cast-to-text`)
 //! - [`resolve`] (SW-02): the `{{params.x}}` / `{{steps.y.output}}` binding
 //!   engine and the deterministic plan renderer
 //! - [`prompt`] (SW-03): the `--prompt` inference composer — structured
@@ -21,6 +22,8 @@
 //! member allowed to spawn processes); `smah` itself never invokes it — it
 //! only prints the exact invocation (owner decision 2026-11-09).
 
+pub mod builtin;
+pub mod cast;
 pub mod loader;
 
 /// Maximum number of steps one wrapper may declare (load-time cap; a
