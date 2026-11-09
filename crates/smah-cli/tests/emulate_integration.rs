@@ -509,15 +509,18 @@ async fn global_model_flag_precedes_tool_and_wins() {
 }
 
 #[test]
-fn bare_smah_is_the_honest_notice_exit_2() {
+fn bare_smah_shows_help_not_an_error() {
+    // RA-06: bare `smah` is help (exit 0); the config-init offer only
+    // appears on a TTY with no config (config_init.rs covers that path's
+    // non-TTY shape).
     let sandbox = Sandbox::new();
-    let (code, _, stderr) = run(Command::cargo_bin("smah")
+    let (code, stdout, _) = run(Command::cargo_bin("smah")
         .expect("smah binary")
         .env("SMAH_VIRTUAL_TOOLS_DIR", &sandbox.tools)
         .output()
         .expect("run"));
-    assert_eq!(code, 2);
-    assert!(stderr.contains("not in this build yet"), "{stderr}");
+    assert_eq!(code, 0);
+    assert!(stdout.contains("Usage: smah"), "help on stdout: {stdout}");
 }
 
 // ---------------------------------------------------------------------------

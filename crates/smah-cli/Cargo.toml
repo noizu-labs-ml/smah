@@ -18,6 +18,10 @@ uuid = { workspace = true }
 sha2 = { workspace = true }
 # hook-snippet timestamps (local time with offset, repo convention)
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# masked API-key entry at config init (TTY echo off, no subprocess)
+rpassword = "7"
+# config document building (order-preserving mapping)
+serde_yaml_ng = { workspace = true }
 
 [dev-dependencies]
 # tokio::test for wiremock servers (providers own their runtimes; the CLI itself is blocking)
