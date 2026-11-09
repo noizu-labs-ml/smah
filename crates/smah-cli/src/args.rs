@@ -106,6 +106,8 @@ pub fn split_emulate_tail() -> Option<(Cli, String, Vec<String>)> {
 /// Subcommands seeded by the virtual-tools milestone.
 #[derive(Subcommand, Debug)]
 pub enum Command {
+    /// One-shot question answering (RA-01): `smah ask "<question>"`.
+    Ask(AskArgs),
     /// Virtual-tool discovery.
     Tools {
         /// `smah tools list` — the only tools verb in this build.
@@ -118,6 +120,19 @@ pub enum Command {
         #[command(subcommand)]
         cmd: HooksCommand,
     },
+}
+
+/// `smah ask` arguments (RA-01).
+#[derive(clap::Args, Debug)]
+pub struct AskArgs {
+    /// The question (quoted, or bare words). Piped stdin is attached to the
+    /// model as data — it still needs a question.
+    #[arg(trailing_var_arg = true, required = true)]
+    pub query: Vec<String>,
+
+    /// Additional operator instructions for this ask (a text file).
+    #[arg(short = 'i', long, value_name = "PATH")]
+    pub instructions: Option<PathBuf>,
 }
 
 /// `smah tools ...`

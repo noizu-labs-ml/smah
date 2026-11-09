@@ -6,6 +6,7 @@
 //! matching code.
 
 mod args;
+mod ask_cmd;
 mod backend;
 mod emulate;
 mod hooks;
@@ -25,12 +26,13 @@ fn main() {
     // Subcommands otherwise; bare `smah` gets the honest not-yet notice
     // (exit 2) — never a fake of the M5 surface.
     let code = match &cli.command {
+        Some(Command::Ask(ask)) => ask_cmd::run_ask(&cli, ask),
         Some(Command::Tools { cmd }) => tools_list::run(cmd),
         Some(Command::Hooks { cmd }) => hooks::run(cmd),
         None => {
             eprintln!(
-                "smah: the full command surface (ask, chat, history) is not in this build yet (M5). \
-Available now: smah --emulate-cli <tool> [args], smah tools list, smah hooks zsh|bash|envrc|shims."
+                "smah: the interactive surface (chat, history) is not in this build yet (M5). \
+Available now: smah ask \"<question>\", smah --emulate-cli <tool> [args], smah tools list, smah hooks zsh|bash|envrc|shims."
             );
             smah_core::ExitCode::Usage.code()
         }
