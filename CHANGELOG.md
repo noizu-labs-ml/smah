@@ -1,6 +1,9 @@
 CHANGE LOG
 ==============
 
+## 2026-11-10
+- docs(plans): mallm fold-in assumptions A5–A7 confirmed by owner (2026-11-10) and moved to §8 Decisions as D5–D7 — history → SQLite `smah.db` (import `history.jsonl`), validation → the `jsonschema` crate against the vendored `mallm.schema.json`, retirement trigger → parity matrix all green + explicit owner call; no pending wording remains (docs/plans/mallm-fold.md)
+
 ## 2026-11-09
 - retire PyPI release lane: .github/workflows/release.yml deleted (PyPI Trusted Publishing on v* tags) — Python package on PyPI frozen at 0.2.0, deprecated, NOT yanked; README deprecation note, Installation now leads with `cargo install --git https://github.com/noizu-labs-ml/smah smah-cli` (Rust toolchain, MSRV 1.82); PROJ-LAYOUT + THREAT-MODEL T-007 mentions synced (#37). → stage → main (#38/#39).
 - docs(plans): add mallm fold-in plan — phased Rust port of mallm into a `smah-docs` crate + `smah docs` subcommand, with the help-capture exec question flagged as an owner decision (`docs/plans/mallm-fold.md`)
