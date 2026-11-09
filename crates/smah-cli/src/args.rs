@@ -61,6 +61,22 @@ pub struct Cli {
     #[arg(long = "param", value_name = "NAME=VALUE", action = clap::ArgAction::Append)]
     pub param: Vec<String>,
 
+    /// Compose a recipe change with inference (SW-03):
+    /// `smah --wrapper <name> --prompt "<natural language>"` resolves the
+    /// model's structured change object into a reviewable diff and writes
+    /// nothing until you accept (`--accept`, or the interactive prompt).
+    #[arg(long, value_name = "TEXT")]
+    pub prompt: Option<String>,
+
+    /// Accept the `--prompt` diff non-interactively (applies the change,
+    /// stamps provenance + approval).
+    #[arg(long)]
+    pub accept: bool,
+
+    /// Reject the `--prompt` diff non-interactively (nothing is written).
+    #[arg(long)]
+    pub reject: bool,
+
     /// Disable the file surface for this run (all directives become soft
     /// refusals back to the model).
     #[arg(long)]

@@ -15,16 +15,21 @@
 //! belongs to the companion runner, never to a wrapper called "run".
 
 use std::collections::BTreeMap;
+use std::io::IsTerminal;
 use std::path::Path;
 
 use smah_core::errors::SmahError;
+use smah_core::settings::Settings;
+use smah_core::virtual_tools::driver::{ChatBackend, ChatMessage};
 use smah_core::virtual_tools::is_valid_name;
 use smah_core::wrappers::loader::{self, discover, WrapperDef};
+use smah_core::wrappers::prompt::{self, PromptCache, PromptCacheEntry, RecipeChanges};
 use smah_core::wrappers::resolve::{self, ResolvedPlan};
 
 use clap::Parser;
 
 use crate::args::{Cli, WrapperCommand};
+use crate::backend::{split_model_spec, ProviderBackend, DEFAULT_MODEL_ID, DEFAULT_PROVIDER};
 
 /// Dispatch `smah wrapper <cmd>`; returns the process exit code.
 pub fn run_sub(cmd: &WrapperCommand) -> i32 {
@@ -267,13 +272,230 @@ pub fn run_argv0_dispatch() -> Option<i32> {
         .wrapper
         .clone()
         .expect("argv was rewritten with --wrapper");
-    Some(run_flag(&name, &cli.param))
+    Some(match &cli.prompt {
+        Some(nl) => run_prompt(&name, nl, &cli),
+        None => run_flag(&name, &cli.param),
+    })
+}
+
+/// The `--prompt` compose-review flow (SW-03): inference as a recipe
+/// composer. The model returns a structured changes object; it is applied
+/// in memory, re-validated through the full loader, and rendered as a diff.
+/// Nothing is written until an explicit accept — and accepting IS the
+/// approval review `smah-run --execute` later demands (provenance +
+/// `approved:` stamps land together). Still print-only otherwise.
+pub fn run_prompt(name: &str, nl: &str, cli: &Cli) -> i32 {
+    if cli.accept && cli.reject {
+        eprintln!("smah: --accept and --reject are mutually exclusive");
+        return smah_core::ExitCode::Usage.code();
+    }
+    match prompt_flow(name, nl, cli) {
+        Ok(code) => code,
+        Err(err) => {
+            eprintln!("{}", err.render("smah.log"));
+            err.exit_code().code()
+        }
+    }
+}
+
+fn prompt_flow(name: &str, nl: &str, cli: &Cli) -> Result<i32, SmahError> {
+    let wrapper = load_wrapper(name)?;
+    let raw =
+        std::fs::read_to_string(&wrapper.path).map_err(|err| SmahError::WrapperFileInvalid {
+            path: wrapper.path.display().to_string(),
+            detail: err.to_string(),
+        })?;
+    let wrapper_sha = prompt::sha256_hex(raw.as_bytes());
+    let prompt_sha = prompt::sha256_hex(nl.as_bytes());
+
+    // Cache first (owner decision): an unchanged wrapper + a repeated prompt
+    // skips inference entirely; a poisoned entry is dropped loudly above.
+    let mut cache = PromptCache::load(name);
+    let cached = match cache.lookup(&wrapper_sha, &prompt_sha) {
+        Ok(hit) => hit,
+        Err(warn) => {
+            eprintln!("smah(wrapper): {warn}");
+            None
+        }
+    };
+    let (changes, model_label, composed_fresh) = match cached {
+        Some((changes, model)) => (changes, model, false),
+        None => {
+            let changes = compose(&wrapper, nl, cli)?;
+            let model = cli
+                .model
+                .clone()
+                .or_else(|| wrapper.model.clone())
+                .unwrap_or_else(|| DEFAULT_MODEL_ID.to_string());
+            (changes, model, true)
+        }
+    };
+    if composed_fresh {
+        let entry = PromptCacheEntry {
+            wrapper_sha256: wrapper_sha,
+            prompt_sha256: prompt_sha.clone(),
+            model: model_label.clone(),
+            ts: prompt::now_rfc3339(),
+            changes_json: serde_json::to_string(&changes).unwrap_or_default(),
+        };
+        if let Err(warn) = cache.record(entry) {
+            eprintln!("smah(wrapper): prompt cache not written: {warn}");
+        }
+    }
+
+    // Apply + full re-validation before anything is presented as applyable:
+    // a diff that cannot produce a loadable recipe is a contract failure,
+    // not a reviewable proposal.
+    let tool_names = prompt::current_tool_names();
+    let (mut new_def, content) =
+        prompt::apply_changes(&wrapper, &changes, &tool_names).map_err(|detail| {
+            SmahError::WrapperPromptInvalid {
+                wrapper: name.to_string(),
+                detail,
+            }
+        })?;
+
+    println!(
+        "smah wrapper '{}' — proposed change{}:",
+        name,
+        if composed_fresh {
+            String::new()
+        } else {
+            " (cache hit: same wrapper content + same prompt, no model call)".to_string()
+        }
+    );
+    print!("{}", prompt::render_changes_summary(&changes));
+    println!();
+    println!("---- proposed {} ----", wrapper.path.display());
+    println!("{content}--------------------------");
+    let stamp = prompt::provenance_stamp(
+        &prompt::now_rfc3339(),
+        &model_label,
+        &uuid::Uuid::new_v4().to_string(),
+        &prompt_sha,
+    );
+    println!("on accept the file gains: {stamp}");
+
+    // Decision: flags for scripts, a prompt on a TTY, a printed hint
+    // otherwise (never block a pipe on a question).
+    if !std::io::stdin().is_terminal() && !cli.accept && !cli.reject {
+        println!();
+        println!(
+            "nothing written. Re-run with --accept to apply this change, or --reject to discard it."
+        );
+        return Ok(0);
+    }
+    let decision = if cli.accept {
+        'a'
+    } else if cli.reject {
+        'r'
+    } else {
+        read_decision()
+    };
+
+    match decision {
+        'r' => {
+            println!("rejected — {} is unchanged.", wrapper.path.display());
+            Ok(0)
+        }
+        'e' => {
+            let proposed = wrapper.path.with_extension("md.proposed");
+            let mut provenance = prompt::extract_provenance(&raw);
+            provenance.push(stamp);
+            let proposal = prompt::render_with_provenance(&content, &provenance);
+            std::fs::write(&proposed, proposal).map_err(|err| SmahError::WrapperFileInvalid {
+                path: proposed.display().to_string(),
+                detail: format!("cannot write the proposal: {err}"),
+            })?;
+            println!(
+                "proposal written to {}. Edit it, add an 'approved:' stamp, then replace {} by hand.",
+                proposed.display(),
+                wrapper.path.display()
+            );
+            Ok(0)
+        }
+        _ => {
+            // Accepting the diff is the review: stamp approval + provenance.
+            new_def.approved = Some(prompt::now_rfc3339());
+            let mut provenance = prompt::extract_provenance(&raw);
+            provenance.push(stamp);
+            let final_content =
+                prompt::render_with_provenance(&prompt::render_wrapper_file(&new_def), &provenance);
+            // Re-validate the exact bytes that will land (stamps included).
+            loader::parse_wrapper(&final_content, name, &tool_names).map_err(|detail| {
+                SmahError::WrapperPromptInvalid {
+                    wrapper: name.to_string(),
+                    detail: format!("generated file failed re-validation: {detail}"),
+                }
+            })?;
+            let tmp = wrapper.path.with_extension("md.tmp");
+            std::fs::write(&tmp, &final_content).map_err(|err| SmahError::WrapperFileInvalid {
+                path: tmp.display().to_string(),
+                detail: format!("cannot write: {err}"),
+            })?;
+            std::fs::rename(&tmp, &wrapper.path).map_err(|err| SmahError::WrapperFileInvalid {
+                path: wrapper.path.display().to_string(),
+                detail: format!("cannot replace: {err}"),
+            })?;
+            println!(
+                "smah: applied + approved {}. Plan it with 'smah --wrapper {name}'; execution lives in smah-run.",
+                wrapper.path.display()
+            );
+            Ok(0)
+        }
+    }
+}
+
+/// One composition turn: settings → provider → the structured answer.
+fn compose(wrapper: &WrapperDef, nl: &str, cli: &Cli) -> Result<RecipeChanges, SmahError> {
+    let settings = match &cli.config {
+        Some(path) => Settings::load_from(path)?,
+        None => Settings::load()?,
+    };
+    // Model precedence (owner decision Q4): --model > wrapper `model:` >
+    // the spec default — no new hardcoded ids.
+    let model_spec = cli
+        .model
+        .clone()
+        .or_else(|| wrapper.model.clone())
+        .unwrap_or_else(|| DEFAULT_MODEL_ID.to_string());
+    let (provider_key, model_id) = split_model_spec(&model_spec, DEFAULT_PROVIDER);
+    let provider = smah_providers::registry::get_provider(&provider_key, &settings, None)?;
+    let backend = ProviderBackend::new(provider);
+    let system = prompt::compose_system_prompt(wrapper);
+    let user = prompt::compose_user_prompt(wrapper, nl);
+    let messages = vec![ChatMessage::user(user)];
+    let mut quiet = |_: &str| {};
+    let answer = backend.stream_turn(&model_id, &system, &messages, &mut quiet)?;
+    prompt::parse_changes(&answer).map_err(|detail| SmahError::WrapperPromptInvalid {
+        wrapper: wrapper.name.clone(),
+        detail,
+    })
+}
+
+/// Interactive review: a/e/r on a TTY (EOF or error rejects — never block).
+fn read_decision() -> char {
+    use std::io::BufRead;
+    println!();
+    println!("apply this change? [a]ccept / [e]dit (write a .proposed file) / [r]eject:");
+    let stdin = std::io::stdin();
+    for line in stdin.lock().lines() {
+        let Ok(line) = line else {
+            return 'r';
+        };
+        match line.trim().to_ascii_lowercase().as_str() {
+            "a" | "y" | "yes" => return 'a',
+            "e" | "edit" => return 'e',
+            "r" | "n" | "no" => return 'r',
+            _ => continue,
+        }
+    }
+    'r'
 }
 
 #[cfg(test)]
 mod tests {
     use super::wrapper_name_from_argv0;
-
     #[test]
     fn argv0_names_extract_and_reject() {
         assert_eq!(

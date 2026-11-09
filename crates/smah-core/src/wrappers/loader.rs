@@ -229,8 +229,23 @@ pub fn load_with_tool_names(
         .file_stem()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_default();
+    let mut def = parse_wrapper(&raw, &stem, tool_names)?;
+    def.path = path.to_path_buf();
+    Ok(def)
+}
 
-    let (frontmatter, body) = split_frontmatter(&raw, path)?;
+/// Parse + validate wrapper **content** as a string (the `--prompt` apply
+/// flow re-validates generated content through this seam before anything is
+/// written; `load_with_tool_names` is the file-backed wrapper around it).
+/// `stem` is the expected `name` (the filename stem the content belongs to).
+/// The returned def's `path` is empty — callers that loaded a real file set
+/// it themselves.
+pub fn parse_wrapper(
+    raw: &str,
+    stem: &str,
+    tool_names: &HashSet<String>,
+) -> Result<WrapperDef, String> {
+    let (frontmatter, body) = split_frontmatter(raw, &format!("{stem}.md"))?;
 
     let Value::Mapping(map) = frontmatter else {
         return Err("frontmatter is not a key/value mapping".to_string());
@@ -654,7 +669,7 @@ pub fn load_with_tool_names(
         outputs,
         preconditions,
         body: body.trim().to_string(),
-        path: path.to_path_buf(),
+        path: PathBuf::new(),
     })
 }
 
@@ -716,9 +731,10 @@ pub fn scan_bindings(template: &str) -> Result<Vec<Binding>, String> {
 
 /// Split a leading `---`-fenced YAML frontmatter from the markdown body
 /// (same contract as the virtual-tool loader; comments are legal YAML, so
-/// provenance stamps survive round-trips).
-fn split_frontmatter(raw: &str, path: &Path) -> Result<(Value, String), String> {
-    let nometa = format!("{}: ", path.display());
+/// provenance stamps survive round-trips). `label` names the file in error
+/// messages.
+fn split_frontmatter(raw: &str, label: &str) -> Result<(Value, String), String> {
+    let nometa = format!("{label}: ");
     let mut lines = raw.lines();
     if lines.next().map(str::trim_end) != Some("---") {
         return Err(format!("{nometa}must start with a '---' frontmatter fence"));

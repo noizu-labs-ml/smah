@@ -25,6 +25,7 @@
 pub mod builtin;
 pub mod cast;
 pub mod loader;
+pub mod prompt;
 pub mod resolve;
 
 /// Maximum number of steps one wrapper may declare (load-time cap; a
