@@ -2856,6 +2856,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "smah-run"
+version = "0.0.0"
+dependencies = [
+ "assert_cmd",
+ "chrono",
+ "clap",
+ "libc",
+ "predicates",
+ "serde",
+ "serde_json",
+ "smah-core",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
 name = "smah-tui"
 version = "0.0.0"
 dependencies = [

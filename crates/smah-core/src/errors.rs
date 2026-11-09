@@ -286,6 +286,110 @@ pub fn driver_unavailable(driver: impl AsRef<str>, hint: impl AsRef<str>) -> Str
     )
 }
 
+// --- Script wrappers — W-series (epic.script-wrapper, SW-02) ---------------
+//
+// Same reuse discipline as the V-series: no seventh exit code. A missing
+// wrapper or a missing/typo'd param is Usage (2); an invalid or
+// unresolvable wrapper file is Config (3).
+
+/// No wrapper by that name (W-series, exit 2).
+pub const WRAPPER_NOT_FOUND: &str =
+    "smah: no wrapper named '{name}'. Installed: {installed}. Run 'smah wrapper list'.";
+
+/// A wrapper file failed validation (W-series, exit 3).
+pub const WRAPPER_FILE_INVALID: &str =
+    "smah: wrapper file at {path} is invalid: {detail}. Fix or remove the file; 'smah wrapper list' shows the reason.";
+
+/// A required param was not supplied at invocation (W-series, exit 2).
+pub const WRAPPER_PARAM_MISSING: &str =
+    "smah: wrapper '{name}' is missing required param(s): {params}. Pass --param <name>=<value>.";
+
+/// A param was supplied that the wrapper does not declare (W-series, exit 2
+/// — a typo'd `--param` silently doing nothing is a footgun).
+pub const WRAPPER_PARAM_UNKNOWN: &str =
+    "smah: --param '{param}' is not declared by wrapper '{wrapper}' (declared: {declared}).";
+
+/// The wrapper loaded but its steps did not resolve (unknown built-in, bad
+/// binding value at invocation; W-series, exit 3).
+pub const WRAPPER_RESOLVE: &str = "smah: wrapper '{name}' did not resolve: {detail}.";
+
+/// The `--prompt` composition failed the model contract (SW-03, W-series,
+/// exit 5 — the answer was not a valid changes object, or the change it
+/// describes cannot produce a loadable recipe; the wrapper is untouched).
+pub const WRAPPER_PROMPT_INVALID: &str =
+    "smah: --prompt for wrapper '{wrapper}' produced an unusable change: {detail}. Nothing was written; rephrase the request or edit the file by hand ('smah wrapper show {wrapper}').";
+
+/// W-series: no wrapper by that name.
+pub fn wrapper_not_found(name: impl AsRef<str>, installed: impl AsRef<str>) -> String {
+    fill(
+        WRAPPER_NOT_FOUND,
+        &[
+            ("{name}", name.as_ref().to_string()),
+            ("{installed}", installed.as_ref().to_string()),
+        ],
+    )
+}
+
+/// W-series: wrapper file failed validation.
+pub fn wrapper_file_invalid(path: impl AsRef<str>, detail: impl AsRef<str>) -> String {
+    fill(
+        WRAPPER_FILE_INVALID,
+        &[
+            ("{path}", path.as_ref().to_string()),
+            ("{detail}", detail.as_ref().to_string()),
+        ],
+    )
+}
+
+/// W-series: missing required params.
+pub fn wrapper_param_missing(name: impl AsRef<str>, params: impl AsRef<str>) -> String {
+    fill(
+        WRAPPER_PARAM_MISSING,
+        &[
+            ("{name}", name.as_ref().to_string()),
+            ("{params}", params.as_ref().to_string()),
+        ],
+    )
+}
+
+/// W-series: supplied param is not declared.
+pub fn wrapper_param_unknown(
+    param: impl AsRef<str>,
+    wrapper: impl AsRef<str>,
+    declared: impl AsRef<str>,
+) -> String {
+    fill(
+        WRAPPER_PARAM_UNKNOWN,
+        &[
+            ("{param}", param.as_ref().to_string()),
+            ("{wrapper}", wrapper.as_ref().to_string()),
+            ("{declared}", declared.as_ref().to_string()),
+        ],
+    )
+}
+
+/// W-series: steps did not resolve.
+pub fn wrapper_resolve(name: impl AsRef<str>, detail: impl AsRef<str>) -> String {
+    fill(
+        WRAPPER_RESOLVE,
+        &[
+            ("{name}", name.as_ref().to_string()),
+            ("{detail}", detail.as_ref().to_string()),
+        ],
+    )
+}
+
+/// W-series (SW-03): `--prompt` composition unusable.
+pub fn wrapper_prompt_invalid(wrapper: impl AsRef<str>, detail: impl AsRef<str>) -> String {
+    fill(
+        WRAPPER_PROMPT_INVALID,
+        &[
+            ("{wrapper}", wrapper.as_ref().to_string()),
+            ("{detail}", detail.as_ref().to_string()),
+        ],
+    )
+}
+
 /// Every user-facing failure the CLI can terminate with.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SmahError {
@@ -429,6 +533,57 @@ pub enum SmahError {
         /// One-line status (stub: "not implemented yet; ...").
         hint: String,
     },
+    /// W-series (SW-02) — no wrapper by that name (exit 2, Usage).
+    #[error("{}", wrapper_not_found(.name, .installed))]
+    WrapperNotFound {
+        /// The requested wrapper name.
+        name: String,
+        /// Installed wrapper names, comma-joined, or "(none)".
+        installed: String,
+    },
+    /// W-series (SW-02) — wrapper file invalid (exit 3, Config).
+    #[error("{}", wrapper_file_invalid(.path, .detail))]
+    WrapperFileInvalid {
+        /// The wrapper file's path.
+        path: String,
+        /// Why it was rejected, one line.
+        detail: String,
+    },
+    /// W-series (SW-02) — required params missing at invocation (exit 2).
+    #[error("{}", wrapper_param_missing(.name, .params))]
+    WrapperParamMissing {
+        /// Wrapper name.
+        name: String,
+        /// Missing param names, comma-joined.
+        params: String,
+    },
+    /// W-series (SW-02) — supplied param not declared (exit 2).
+    #[error("{}", wrapper_param_unknown(.param, .wrapper, .declared))]
+    WrapperParamUnknown {
+        /// The supplied param name.
+        param: String,
+        /// Wrapper name.
+        wrapper: String,
+        /// Declared param names, comma-joined, or "(none)".
+        declared: String,
+    },
+    /// W-series (SW-02) — the wrapper loaded but did not resolve (exit 3).
+    #[error("{}", wrapper_resolve(.name, .detail))]
+    WrapperResolve {
+        /// Wrapper name.
+        name: String,
+        /// Why resolution failed, one line.
+        detail: String,
+    },
+    /// W-series (SW-03) — `--prompt` composition unusable (exit 5: the
+    /// model failed the contract, not the user's config).
+    #[error("{}", wrapper_prompt_invalid(.wrapper, .detail))]
+    WrapperPromptInvalid {
+        /// Wrapper name.
+        wrapper: String,
+        /// Why the change is unusable, one line.
+        detail: String,
+    },
 }
 
 /// Placeholder used only for `Display` on [`SmahError::Internal`]; the real
@@ -439,23 +594,29 @@ impl SmahError {
     /// Exit code class for this failure (erratum encoded: internal → 1).
     pub fn exit_code(&self) -> ExitCode {
         match self {
-            SmahError::AskNeedsQuery | SmahError::Usage { .. } | SmahError::ToolNotFound { .. } => {
-                ExitCode::Usage
-            }
+            SmahError::AskNeedsQuery
+            | SmahError::Usage { .. }
+            | SmahError::ToolNotFound { .. }
+            | SmahError::WrapperNotFound { .. }
+            | SmahError::WrapperParamMissing { .. }
+            | SmahError::WrapperParamUnknown { .. } => ExitCode::Usage,
             SmahError::ConfigUnreadable { .. }
             | SmahError::ConfigGate { .. }
             | SmahError::Database { .. }
             | SmahError::ToolFileInvalid { .. }
             | SmahError::DirectiveViolation { .. }
             | SmahError::DirectiveProtocol { .. }
-            | SmahError::DriverUnavailable { .. } => ExitCode::Config,
+            | SmahError::DriverUnavailable { .. }
+            | SmahError::WrapperFileInvalid { .. }
+            | SmahError::WrapperResolve { .. } => ExitCode::Config,
             SmahError::MissingApiKey { .. }
             | SmahError::NoModelsEnabled
             | SmahError::ProviderAuth { .. } => ExitCode::Auth,
             SmahError::ProviderRequest { .. }
             | SmahError::ProviderUnavailable { .. }
             | SmahError::Network { .. }
-            | SmahError::DirectiveLoopOverflow { .. } => ExitCode::Provider,
+            | SmahError::DirectiveLoopOverflow { .. }
+            | SmahError::WrapperPromptInvalid { .. } => ExitCode::Provider,
             SmahError::Internal { .. } => ExitCode::Internal,
         }
     }

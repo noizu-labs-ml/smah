@@ -48,6 +48,35 @@ pub struct Cli {
     #[arg(long, value_name = "TOOL")]
     pub emulate: Option<String>,
 
+    /// Run an installed script wrapper deterministically (no inference):
+    /// `smah --wrapper <name> [--param k=v]...` prints the resolved, ordered
+    /// plan and the exact `smah-run` invocation — nothing executes here
+    /// (smah is print-only; execution lives in the smah-run crate).
+    #[arg(long, value_name = "NAME")]
+    pub wrapper: Option<String>,
+
+    /// Wrapper invocation param, repeatable: `--param <name>=<value>`.
+    /// Values starting with `-` need the inline form
+    /// `--param=<name>=<value>`.
+    #[arg(long = "param", value_name = "NAME=VALUE", action = clap::ArgAction::Append)]
+    pub param: Vec<String>,
+
+    /// Compose a recipe change with inference (SW-03):
+    /// `smah --wrapper <name> --prompt "<natural language>"` resolves the
+    /// model's structured change object into a reviewable diff and writes
+    /// nothing until you accept (`--accept`, or the interactive prompt).
+    #[arg(long, value_name = "TEXT")]
+    pub prompt: Option<String>,
+
+    /// Accept the `--prompt` diff non-interactively (applies the change,
+    /// stamps provenance + approval).
+    #[arg(long)]
+    pub accept: bool,
+
+    /// Reject the `--prompt` diff non-interactively (nothing is written).
+    #[arg(long)]
+    pub reject: bool,
+
     /// Disable the file surface for this run (all directives become soft
     /// refusals back to the model).
     #[arg(long)]
@@ -118,6 +147,12 @@ pub enum Command {
         #[command(subcommand)]
         cmd: HooksCommand,
     },
+    /// Script-wrapper discovery and deterministic planning (print-only).
+    Wrapper {
+        /// `smah wrapper <verb>`.
+        #[command(subcommand)]
+        cmd: WrapperCommand,
+    },
 }
 
 /// `smah tools ...`
@@ -146,5 +181,34 @@ pub enum HooksCommand {
         /// Target bin dir (default `~/.local/state/smah/bin`).
         #[arg(long, value_name = "DIR")]
         dir: Option<PathBuf>,
+    },
+}
+
+/// `smah wrapper ...` (SW-02).
+#[derive(Subcommand, Debug)]
+pub enum WrapperCommand {
+    /// List installed wrappers with validity status.
+    List {
+        /// Emit machine-readable JSON on stdout.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Print a wrapper's definition file verbatim.
+    Show {
+        /// Wrapper name.
+        name: String,
+    },
+    /// Load + statically resolve a wrapper (no params supplied).
+    Validate {
+        /// Wrapper name.
+        name: String,
+    },
+    /// Resolve + print the deterministic plan for a wrapper (print-only).
+    Run {
+        /// Wrapper name.
+        name: String,
+        /// Invocation param, repeatable: `--param <name>=<value>`.
+        #[arg(long = "param", value_name = "NAME=VALUE", action = clap::ArgAction::Append)]
+        param: Vec<String>,
     },
 }
