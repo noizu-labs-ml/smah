@@ -1,0 +1,24 @@
+[package]
+name = "smah-ask"
+version = "0.0.0"
+description = "SMAH question-answering engine: suggestion parsing, risk classification, rendering, sessions."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+smah-core = { path = "../smah-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml_ng = { workspace = true }
+rusqlite = { workspace = true }
+# OS/system context without any subprocess (print-only invariant).
+sysinfo = { workspace = true }
+# Clipboard handoff: pure-Rust crate, never a spawned pbcopy/xclip.
+arboard = { workspace = true }
+# Session timestamps (local time, repo convention).
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
