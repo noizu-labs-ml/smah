@@ -9,6 +9,7 @@ mod args;
 mod ask_cmd;
 mod backend;
 mod config_cmd;
+mod doctor_cmd;
 mod emulate;
 mod hooks;
 mod tools_list;
@@ -30,6 +31,7 @@ fn main() {
     let code = match &cli.command {
         Some(Command::Ask(ask)) => ask_cmd::run_ask(&cli, ask),
         Some(Command::Config { cmd }) => config_cmd::run_config(cli.config.as_deref(), cmd),
+        Some(Command::Doctor(args)) => doctor_cmd::run_doctor(args, cli.config.as_deref()),
         Some(Command::Tools { cmd }) => tools_list::run(cmd),
         Some(Command::Hooks { cmd }) => hooks::run(cmd),
         None => {
