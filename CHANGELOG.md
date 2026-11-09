@@ -1,6 +1,9 @@
 CHANGE LOG
 ==============
 
+## 2026-11-09
+- docs(plans): add mallm fold-in plan — phased Rust port of mallm into a `smah-docs` crate + `smah docs` subcommand, with the help-capture exec question flagged as an owner decision (`docs/plans/mallm-fold.md`)
+
 ## 2026-10-28
 - docs: add AGENT-README.md (agent orientation)
 
