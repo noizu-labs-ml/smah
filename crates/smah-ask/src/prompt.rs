@@ -76,6 +76,15 @@ pub fn refine_turn(follow_up: &str) -> String {
     )
 }
 
+/// The [e]dit re-explain turn (RA-03): the operator changed a suggested
+/// command outside smah; the model is asked to confirm what the edited
+/// command now does and flag anything risky about the change.
+pub fn edit_reexplain_turn(original: &str, edited: &str) -> String {
+    format!(
+        "The operator edited a command you suggested.\n\nOriginal:\n{original}\n\nEdited:\n{edited}\n\nRe-assess: state plainly what the edited command now does, flag anything risky the change introduces, and re-issue the corrected command as a fresh exec tag if it differs. Never propose executing it — smah is print-only."
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

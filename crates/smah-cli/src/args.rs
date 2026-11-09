@@ -129,6 +129,22 @@ pub enum Command {
     /// Provider/config health check (RA-07): no network calls, no key
     /// material shown — presence only.
     Doctor(DoctorArgs),
+    /// Interactive chat over a persisted session (RA-03): the standing
+    /// keys — [c]opy [e]dit [r]efine [n]ext [q]uit.
+    Chat {
+        /// The opening question.
+        #[arg(trailing_var_arg = true, required = true)]
+        query: Vec<String>,
+    },
+    /// Resume a saved session (RA-03): `--last` or a session id.
+    Resume {
+        /// Resume the most recently modified session.
+        #[arg(long)]
+        last: bool,
+        /// Session id to resume.
+        #[arg(value_name = "ID")]
+        id: Option<i64>,
+    },
 }
 
 /// `smah doctor` flags.
