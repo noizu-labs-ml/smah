@@ -267,3 +267,143 @@ async fn piped_input_rides_along_and_truncation_is_loud() {
         "not a byte over the cap"
     );
 }
+
+// ---------------------------------------------------------------------------
+// RA-04 — non-TTY contract + --json
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn json_mode_emits_one_parseable_object() {
+    let sandbox = Sandbox::new();
+    let server = MockServer::start().await;
+    mount_answer(&server, GOOD_ANSWER).await;
+
+    let output = sandbox
+        .ask(&server, &[], &["--json", "free disk"])
+        .write_stdin("")
+        .output()
+        .expect("run smah");
+    let (code, stdout, stderr) = run(output);
+
+    assert_eq!(code, 0, "stderr: {stderr}");
+    // The whole stdout is one JSON object — no prose, no blocks, no ANSI.
+    let value: serde_json::Value = serde_json::from_str(stdout.trim())
+        .unwrap_or_else(|err| panic!("stdout is not pure JSON ({err}): {stdout}"));
+    assert_eq!(value["provider"], "anthropic");
+    assert_eq!(value["model"], "claude-opus-5-5");
+    assert!(value["answer"]
+        .as_str()
+        .expect("answer")
+        .contains("Purge old journals"));
+    assert_eq!(
+        value["suggestions"][0]["command"],
+        serde_json::json!("journalctl --vacuum-time=7d")
+    );
+    assert_eq!(
+        value["suggestions"][0]["classification"]["level"],
+        serde_json::json!("benign")
+    );
+    assert!(
+        !stdout.contains('\x1b'),
+        "no ANSI escapes in JSON: {stdout}"
+    );
+    // No streamed prose leaked before the object.
+    assert!(stdout.trim_start().starts_with('{'));
+    // Diagnostics still stderr-only; nothing human on stdout.
+    assert!(stderr.contains("SMAH does not run commands") || stderr.is_empty());
+}
+
+#[tokio::test]
+async fn pipe_mode_stdout_carries_no_ansi_or_chrome() {
+    let sandbox = Sandbox::new();
+    let server = MockServer::start().await;
+    mount_answer(&server, GOOD_ANSWER).await;
+
+    let output = sandbox
+        .ask(&server, &[], &["free disk"])
+        .write_stdin("")
+        .output()
+        .expect("run smah");
+    let (code, stdout, _) = run(output);
+
+    assert_eq!(code, 0);
+    assert!(!stdout.contains('\x1b'), "no ANSI on a non-TTY stdout");
+    assert!(
+        !stdout.contains("SMAH does not run commands"),
+        "chrome stays on stderr"
+    );
+    assert!(stdout.contains("## Suggested command 1 of 1"));
+}
+
+#[tokio::test]
+async fn provider_500_maps_to_exit_5() {
+    let sandbox = Sandbox::new();
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(ResponseTemplate::new(500).set_body_string("boom"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let output = sandbox
+        .ask(&server, &[], &["anything"])
+        .write_stdin("")
+        .output()
+        .expect("run smah");
+    let (code, stdout, stderr) = run(output);
+
+    assert_eq!(code, 5, "stderr: {stderr}");
+    assert!(
+        stdout.is_empty(),
+        "no content after a provider failure: {stdout}"
+    );
+}
+
+#[tokio::test]
+async fn provider_401_maps_to_exit_4() {
+    let sandbox = Sandbox::new();
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(ResponseTemplate::new(401).set_body_json(serde_json::json!({
+            "type": "error",
+            "error": {"type": "authentication_error", "message": "invalid x-api-key"}
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let output = sandbox
+        .ask(&server, &[], &["anything"])
+        .write_stdin("")
+        .output()
+        .expect("run smah");
+    let (code, _, stderr) = run(output);
+
+    assert_eq!(code, 4, "stderr: {stderr}");
+}
+
+#[tokio::test]
+async fn json_mode_error_paths_keep_exit_codes() {
+    // --json does not change failure behavior: usage error still exits 2
+    // with human guidance on stderr and nothing on stdout.
+    let sandbox = Sandbox::new();
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let output = sandbox
+        .ask(&server, &["--json"], &["--max-input-chars"])
+        .write_stdin("")
+        .output()
+        .expect("run smah");
+    let (code, stdout, _) = run(output);
+
+    assert_eq!(code, 2);
+    assert!(stdout.is_empty());
+}
