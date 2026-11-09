@@ -8,15 +8,21 @@
 //! without the key file there is no way to test candidate values against
 //! the log, while within one install correlation still works (same value ⇒
 //! same token). The key is load-or-created atomically on first use
-//! (0700 dir, tmp write at 0600 + fsync + rename — the same
-//! atomic-private-write pattern as the approval stamp). Any failure to
-//! create or read the key is an `Err` — smah-run refuses to execute
-//! (fail-closed, consistent with the audit-before-exec rule).
+//! (0700 dir, pid-unique tmp write at 0600 + fsync, then a NO-CLOBBER
+//! hard-link install — safe when several processes race on first use, as
+//! parallel test binaries do). Any failure to create or read the key is
+//! an `Err` — smah-run refuses to execute (fail-closed, consistent with
+//! the audit-before-exec rule).
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Key length: 32 bytes (256 bits) of OS randomness.
 pub const KEY_LEN: usize = 32;
+
+/// Staged-tmp name disambiguator: unique across threads in one process
+/// (the pid covers processes).
+static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// Default key path: `~/.smah/audit.key` (alongside `~/.smah/config.yaml`).
 pub fn default_path() -> PathBuf {
@@ -33,6 +39,11 @@ pub fn load_or_create() -> Result<[u8; KEY_LEN], String> {
 }
 
 /// [`load_or_create`] against an explicit path (the test seam).
+///
+/// Safe under concurrent first use (CI runs test binaries in parallel
+/// against one `$HOME`): the staged tmp file is pid-unique and the final
+/// install is a no-clobber hard link — a concurrent creator that wins the
+/// race is authoritative, the loser adopts the installed key and retries.
 pub fn load_or_create_at(path: &Path) -> Result<[u8; KEY_LEN], String> {
     if let Ok(bytes) = std::fs::read(path) {
         if bytes.len() == KEY_LEN {
@@ -46,7 +57,6 @@ pub fn load_or_create_at(path: &Path) -> Result<[u8; KEY_LEN], String> {
         ));
     }
 
-    let key = random_key().ok_or_else(|| "cannot read an OS random source".to_string())?;
     let parent = path
         .parent()
         .ok_or_else(|| format!("{} has no parent directory", path.display()))?;
@@ -62,22 +72,64 @@ pub fn load_or_create_at(path: &Path) -> Result<[u8; KEY_LEN], String> {
         }
     }
 
-    // Atomic private write: the tmp file is 0600 BEFORE any key bytes hit
-    // disk, fsync'd, then renamed into place — a reader never sees a
-    // partial key, and nothing world-readable ever exists.
-    let tmp = path.with_extension("key.tmp");
-    let mut file =
-        open_new_private(&tmp).map_err(|err| format!("cannot write {}: {err}", tmp.display()))?;
-    {
-        use std::io::Write;
-        file.write_all(&key)
-            .and_then(|_| file.sync_data())
+    // A few attempts: between them, re-check whether a concurrent creator
+    // has installed a key we should adopt.
+    for attempt in 0..3u8 {
+        if let Some(key) = adopt_installed(path) {
+            return Ok(key);
+        }
+        let key = random_key().ok_or_else(|| "cannot read an OS random source".to_string())?;
+
+        // Atomic private write: the pid-unique tmp file is 0600 BEFORE any
+        // key bytes hit disk, fsync'd, then hard-linked into place — a
+        // reader never sees a partial key, nothing world-readable ever
+        // exists, and `link` never clobbers a key another process just
+        // installed.
+        // pid + atomic counter: unique across processes AND threads.
+        let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
+        let tmp = path.with_extension(format!(
+            "key.{}.{}.{}.tmp",
+            std::process::id(),
+            seq,
+            attempt
+        ));
+        let mut file = open_new_private(&tmp)
             .map_err(|err| format!("cannot write {}: {err}", tmp.display()))?;
+        {
+            use std::io::Write;
+            file.write_all(&key)
+                .and_then(|_| file.sync_data())
+                .map_err(|err| format!("cannot write {}: {err}", tmp.display()))?;
+        }
+        drop(file);
+        match std::fs::hard_link(&tmp, path) {
+            Ok(_) => {
+                let _ = std::fs::remove_file(&tmp);
+                return Ok(key);
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                // Another process won the race — its key is authoritative.
+                let _ = std::fs::remove_file(&tmp);
+            }
+            Err(err) => {
+                let _ = std::fs::remove_file(&tmp);
+                return Err(format!("cannot finalize {}: {err}", path.display()));
+            }
+        }
     }
-    drop(file);
-    std::fs::rename(&tmp, path)
-        .map_err(|err| format!("cannot finalize {}: {err}", path.display()))?;
-    Ok(key)
+    adopt_installed(path)
+        .ok_or_else(|| "concurrent key creation did not settle — refusing to guess".to_string())
+}
+
+/// Read the installed key if it exists and is well-formed.
+fn adopt_installed(path: &Path) -> Option<[u8; KEY_LEN]> {
+    let bytes = std::fs::read(path).ok()?;
+    if bytes.len() != KEY_LEN {
+        return None;
+    }
+    let mut key = [0u8; KEY_LEN];
+    key.copy_from_slice(&bytes);
+    Some(key)
 }
 
 /// Create a NEW private file for writing (0600 on unix — created before
@@ -213,7 +265,43 @@ mod tests {
         let second = load_or_create_at(&path).expect("reloaded");
         assert_eq!(first, second, "key is stable across loads");
         // No tmp artifact left behind.
-        assert!(!path.with_extension("key.tmp").exists(), "tmp renamed away");
+        let leftovers: Vec<_> = std::fs::read_dir(path.parent().unwrap())
+            .expect("dir")
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "tmp installed away: {leftovers:?}");
+    }
+
+    /// Regression for the CI race: test binaries share one `$HOME` and run
+    /// in parallel, so concurrent FIRST-use creations must settle on one
+    /// key — every caller gets Ok and the SAME key material.
+    #[test]
+    fn concurrent_first_use_settles_on_one_key() {
+        let dir = tempfile::tempdir().expect("tmp");
+        let path = dir.path().join("audit.key");
+        let paths: Vec<_> = (0..8)
+            .map(|_| std::sync::Arc::new(std::sync::Mutex::new(None::<[u8; KEY_LEN]>)))
+            .collect();
+        let mut handles = Vec::new();
+        for slot in &paths {
+            let path = path.clone();
+            let slot = std::sync::Arc::clone(slot);
+            handles.push(std::thread::spawn(move || {
+                let key = load_or_create_at(&path).expect("concurrent create");
+                *slot.lock().unwrap() = Some(key);
+            }));
+        }
+        for handle in handles {
+            handle.join().expect("thread");
+        }
+        let mut keys: Vec<_> = paths
+            .iter()
+            .filter_map(|s| s.lock().unwrap().as_ref().copied())
+            .collect();
+        assert_eq!(keys.len(), 8, "every caller succeeded");
+        keys.dedup();
+        assert_eq!(keys.len(), 1, "one install, one key");
     }
 
     #[test]
