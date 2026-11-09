@@ -1,0 +1,5 @@
+---
+source: crates/smah-core/tests/errors_spec.rs
+expression: error.render(LOG)
+---
+smah: config at /home/tester/.smah/config.yaml is invalid: config version 0.0.2 is not supported by this version of SMAH (expected vsn 0.0.1). Run 'smah config' to regenerate. Full log: /home/tester/.smah/logs/smah.20260101_000000.log.

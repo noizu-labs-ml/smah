@@ -1,0 +1,5 @@
+---
+source: crates/smah-core/tests/errors_spec.rs
+expression: error.render(LOG)
+---
+smah: no API key for provider "anthropic". Run 'smah config' to add one, or export ANTHROPIC_API_KEY. Full log: /home/tester/.smah/logs/smah.20260101_000000.log.
