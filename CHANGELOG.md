@@ -4,6 +4,7 @@ CHANGE LOG
 ## 2026-11-09
 - docs(plans): add mallm fold-in plan — phased Rust port of mallm into a `smah-docs` crate + `smah docs` subcommand, with the help-capture exec question flagged as an owner decision (`docs/plans/mallm-fold.md`)
 - epic: Rust port (rust-tui) → develop — origin/develop merged into epic.rust-tui (doc-pointer headers kept both sides); full Rust CLI verified locally: cargo build clean, 332 tests green (8 ignored), clippy -D warnings + fmt clean, Rust+Python no-shell gates green, Python pytest 200 green; cargo install → bins smah, smah_db (#36). Merges REGULAR, not squash.
+- docs(plans): mallm fold-in owner decisions recorded (2026-11-09) — exec = Option C (corpus-only + piped help; HelpCapture seam kept; any exec reader needs a further owner call); project-local tier keeps .mallm/; how-to pipeline re-homes later as a separate non-SMAH product (not dropped); jev quiz/learn + memory/knowledge.yaml port in P2 via smah-providers/hosted Jev, no exec; history→smah.db SQLite, jsonschema validation, parity-matrix retirement carried as assumptions pending owner (docs/plans/mallm-fold.md §8)
 
 ## 2026-10-28
 - docs: add AGENT-README.md (agent orientation)
