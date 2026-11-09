@@ -13,6 +13,7 @@ mod config_cmd;
 mod doctor_cmd;
 mod emulate;
 mod hooks;
+mod pipe;
 mod tools_list;
 
 use args::{split_emulate_tail, Cli, Command};

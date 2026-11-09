@@ -49,9 +49,9 @@ the PyPI package plus GitHub Actions release via Trusted Publishing.
 | ID | Severity | STRIDE | Component | Status |
 |----|----------|--------|-----------|--------|
 | T-001 | **High** | Info disclosure | Plaintext API key written to DEBUG log (`Settings.log()` save-mode dump, `settings.py:126`, every ask) | **Open** |
-| T-002 | Medium | Info disclosure | Query, full pipe input, operator/system profile logged to `~/.smah/logs/` and stored plaintext in `smah.db`; no encryption or permission hardening anywhere | Open |
+| T-002 | Medium | Info disclosure | Query, full pipe input, operator/system profile logged to `~/.smah/logs/` and stored plaintext in `smah.db`; no encryption. (RA-10: the Rust `smah.db` and config files are now created owner-only 0600 — atomic-create where possible — and log writes pass the secret redactor; contents remain plaintext.) | Partial |
 | T-003 | Medium | Elevation (social) | Suggested command auto-copied to clipboard, no prompt (`runner.py:146-152`) — injected command sits one paste from execution | Partial |
-| T-004 | Medium | Tampering / Elevation | Prompt injection via piped input → model-suggested commands. Execution contained by print-only invariant (test + CI gate); residual = user pastes | Mitigated (execution) |
+| T-004 | Medium | Tampering / Elevation | Prompt injection via piped input → model-suggested commands. Execution contained by print-only invariant (test + CI gate); residual = user pastes. (RA-10 F3: the local classifier is segment-aware over raw tokens — quoted `rm -rf '/'`, glued `;`/`&`/`|` delimiters, `chmod/chown -R` world modes, `>|`/`2>`/`&>`/`tee` block-device redirects, generic fork bombs, download-then-exec, `shred`/`wipefs`/`sgdisk`/`parted`/`fdisk`/`diskutil`/`mkfs`, `find -delete`, `iptables-restore`/`nft flush`, `sh -c` payload recursion — every review probe is a table-driven test; still guidance, not a guarantee) | Mitigated (execution) |
 | T-005 | Low | Spoofing / Tampering | No `base_url` config in code (good) — but SDK-native `OPENAI_BASE_URL`/`ANTHROPIC_BASE_URL` env overrides redirect key + traffic if the environment is attacker-controlled | Accepted (env = B4 trust) |
 | T-006 | Low | Tampering | lxml parsing of model output relies on library defaults (no explicit `resolve_entities=False`, `no_network`, `huge_tree` args); behavior is version-dependent | Partial |
 | T-007 | Low | Tampering (supply chain) | Python workflow (`ci.yml`) pinned by moving tags (`checkout@v4`, `setup-python@v5`), not commit SHA; the Rust `ci-rs.yml` is SHA-pinned. (`release.yml`/PyPI publishing retired 2026-11-09 — its `pypi-publish@release/v1` tag pin retired with it.) | Open |
@@ -63,7 +63,7 @@ the PyPI package plus GitHub Actions release via Trusted Publishing.
 | T-013 | Medium | Tampering | Directive-protocol abuse: sentinel lines leak to stdout and inject into downstream pipe consumers, or malformed directives confuse the driver | Mitigated (scanner intercepts all sentinel lines, malformed ⇒ abort; reserved-sentinel contract; scanner tests) |
 | T-014 | Low | Spoofing / Tampering | Hook snippet injection: crafted tool/file names injecting shell into `smah hooks zsh` output or shim files | Mitigated (name regex + reserved set; unquoted-but-validated emission; golden snapshots) |
 | T-015 | Info | Repudiation / Info disclosure | Audit log tamper; secrets leaking via logged paths/args; args+stdin egress to provider (inherent, cf. T-008) | Partial (metadata-only JSONL, contents never logged, 0700/0600, user-owned dir; no tamper-proofing v1) |
-| T-016 | Low | DoS / cost | Unbounded stdin, endless directive loops, oversized writes → token/disk spend (T-009's analog for virtual tools) | Mitigated (loud truncation cap, `TURNS_MAX=8`, per-directive + aggregate write caps) |
+| T-016 | Low | DoS / cost | Unbounded stdin, endless directive loops, oversized writes → token/disk spend (T-009's analog for virtual tools) | Mitigated (loud truncation cap, `TURNS_MAX=8`, per-directive + aggregate write caps; RA-10 F4: the ask/emulate stdin read is itself memory-bounded — stops retaining at the cap, drains the rest in fixed chunks counting only, so a runaway producer cannot balloon RSS) |
 | T-017 | Medium | Tampering / Spoofing | TUI chrome injection (#18): fabricated content or a `@@smah ui` payload alters terminal UI chrome or emits control sequences that impersonate the host UI | Mitigated (rendered through a sanitizing sink — content is text, never chrome; `ui` payloads are schema-validated display data, invalid ⇒ soft `[ERROR ui …]` result; non-TTY fallback is byte-parity with the cli driver) |
 | T-018 | Medium | Tampering / DoS (cost) | API-driver fabricated-response abuse (#20): a runaway fabrication turn streams unbounded/garbage data to a client, or response/status shapes drift from HTTP | Mitigated (frozen-contract summary bound, strict `{"status": 200-599, "body": JSON}` shape with 1 retry then fixed `500`, 64 KiB fabrication cap, 256 KiB request cap (`413`), 8-entry ledger with 512 B digests) |
 | T-019 | **High** | Tampering (XSS) / Elevation | Web-driver page injection (#19): model-fabricated strings execute as markup/script in the browser, or a cross-origin page drives `/regen` (model-turn spend) or reads `/content.json` | Mitigated (server `html/template` auto-escaping + client `textContent` only, never `innerHTML`; restrictive CSP; `/push` + `/regen` gated on loopback RemoteAddr **and** same-origin; `/regen` POST-only → 403 otherwise; content validated strings-only with key/value/total caps before write) |
@@ -78,9 +78,10 @@ the PyPI package plus GitHub Actions release via Trusted Publishing.
 | T-028 | Low | Info disclosure / Elevation (B7) | MCP transport exposure confusion: a user believes the JSON-RPC surface is private but a listener is reachable, or a routable bind is added later | Mitigated (batch stdio is the default — no listener at all; TCP is opt-in `--tcp-port`, binds `127.0.0.1` only with a loud disclosure line naming the port, bind failure is an error not a fallback; one sequential connection at a time; standalone `services/mcp-vtool` replays frozen artifacts loopback-only, never fabricates) |
 | T-029 | Medium | Spoofing / Repudiation | Real-vs-virtual confusion: a fabricated database is mistaken for a real one (results quoted as ground truth, production tooling pointed at the endpoint) | Partial (session branded `smah-virtual-postgres … FABRICATED DATA` in ParameterStatus, loud bind disclosure, `--no-serve`/`--show-schema` review path, driver docs, metadata-only audit of served statements; brand exists only on the wire — a client that ignores server_version still sees normal rows) |
 | T-030 | Low | DoS / Elevation (B7) | Wire-level abuse of the db/vfs/mcp servers: oversized frames, statement bombs, write attempts, connection floods | Mitigated (PG-wire subset refuses writes `42501`, extended protocol + multi-statement `0A000`, unknown `08P01`; message cap 256 KiB → `54000`, statement text ≤64 KiB; stores opened read-only, fs writes capped 64 KiB/1 MiB total/200 files; one sequential connection at a time; fabrication two-strikes → exit 5; audit records kind + decision only — statement text and contents never logged) |
+| T-031 | **High** | Info disclosure | Provider API key stored as a **literal** in `config.yaml` (world-readable homes, backup jobs, dotfile sync all scoop it); the masked-entry init wrote the literal into the file and only `$VAR` indirection avoided it | Mitigated (RA-10 F2/F7: `config init` stores the key in a secret store — macOS Keychain / Windows Credential Manager / Linux Secret Service over pure-Rust zbus (`keyring` crate, features `apple-native` / `windows-native` / `async-secret-service`+`tokio`+`crypto-rust`; the `sync-secret-service` libdbus FFI backend was audited and **rejected**) — headless falls back to a 0600 atomically-written `~/.smah/secrets.yaml`, or an `env:VAR` reference; config.yaml carries `keychain:smah/<p>` / `file:secrets.yaml#<p>` / `env:<VAR>` references only; resolution order env-chain first, every resolved key registers with the log redactor; `smah config migrate-secrets` moves existing literals out, `smah doctor` names any that remain; store reads/writes use a mockable `SecretStore` seam — CI never touches a real keychain) |
 
-**Coverage:** 18 mitigated · 6 partial · 3 open · 3 accepted (30 items —
-T-001…T-030). Open items have no tracker tickets yet — file issues before
+**Coverage:** 19 mitigated · 6 partial · 3 open · 3 accepted (31 items —
+T-001…T-031). Open items have no tracker tickets yet — file issues before
 fixing (T-001 first).
 
 → *Control details: [threats/data-stores.md](threats/data-stores.md) · [threats/supply-chain.md](threats/supply-chain.md)*
@@ -97,6 +98,16 @@ fixing (T-001 first).
 - **Secrets handling**: keys never printed, never stored in the DB; `config
   show` redacts; `$ENV_VAR` indirection masks as `<env:NAME>`; provider
   settings dumps pop `settings` outside save mode.
+- **Secret stores (RA-10, T-031)**: `config init` never writes a literal
+  key — per-OS stores behind a mockable `SecretStore` seam (keyring crate;
+  no-spawn audit: zbus 4.4.0's only child-process code is its macOS-only
+  launchd transport, not compiled on Linux; keyring-3.6.3 and
+  secret-service-4.0.0 sources contain no process primitives); the secrets
+  file and every temp file are 0600, written atomically (temp + fsync +
+  rename); resolution env-chain first, keys registered with the redactor on
+  resolve (F7); `doctor` warns on literals, `config migrate-secrets` moves
+  them; private `smah.db`/edit-handoff files follow the same 0600 rule
+  (F6).
 - **Endpoint pinning**: clients constructed with `api_key` only — config
   tampering cannot redirect traffic.
 - **PyPI release**: Trusted Publishing (OIDC), no long-lived tokens;

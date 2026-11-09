@@ -59,6 +59,50 @@ pub fn provider_statuses(settings: &Settings) -> Vec<ProviderStatus> {
         .collect()
 }
 
+/// Providers whose `settings.api_key` is still a **literal** in
+/// config.yaml (RA-10 F2 companion): references (`env:`/`keychain:`/
+/// `file:`), legacy `$VAR` values, and absent keys are not literals. The
+/// scan reads the raw YAML — presence only, the value itself is never
+/// returned or printed.
+fn literal_key_providers(settings: &Settings) -> Vec<String> {
+    let path = settings.path();
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    let Ok(value) = serde_yaml_ng::from_str::<serde_yaml_ng::Value>(&text) else {
+        return Vec::new();
+    };
+    let config_dir = path.parent().unwrap_or(std::path::Path::new("."));
+    let Some(providers) = value["inference"]["providers"].as_mapping() else {
+        return Vec::new();
+    };
+    let mut literals = Vec::new();
+    for (key, provider) in providers {
+        let Some(key) = key.as_str() else {
+            continue;
+        };
+        let Some(raw) = provider["settings"]["api_key"].as_str() else {
+            continue;
+        };
+        if raw.is_empty() || raw.starts_with('$') {
+            continue;
+        }
+        if smah_core::secrets::parse_secret_ref(raw, config_dir).is_some() {
+            continue;
+        }
+        literals.push(key.to_string());
+    }
+    literals
+}
+
+/// The doctor's literal-key warning, one string per affected provider
+/// (human line and JSON array entry share the wording).
+fn literal_warning(provider: &str) -> String {
+    format!(
+        "provider '{provider}' stores api_key as a literal in config.yaml — run: smah config migrate-secrets"
+    )
+}
+
 /// Run `smah doctor`; returns the process exit code (0 ≥1 usable provider,
 /// 4 none, 3 broken config).
 pub fn run_doctor(args: &DoctorArgs, cli_config: Option<&std::path::Path>) -> i32 {
@@ -80,6 +124,7 @@ pub fn run_doctor(args: &DoctorArgs, cli_config: Option<&std::path::Path>) -> i3
 
     let statuses = provider_statuses(&settings);
     let usable = statuses.iter().filter(|s| s.usable()).count();
+    let literals = literal_key_providers(&settings);
     let toggles = EgressToggles::from_settings(&settings);
     let config_path = settings.path().display().to_string();
 
@@ -103,6 +148,10 @@ pub fn run_doctor(args: &DoctorArgs, cli_config: Option<&std::path::Path>) -> i3
                     })
                 })
                 .collect::<Vec<_>>(),
+            "warnings": literals
+                .iter()
+                .map(|p| literal_warning(p))
+                .collect::<Vec<_>>(),
         });
         println!(
             "{}",
@@ -121,6 +170,9 @@ pub fn run_doctor(args: &DoctorArgs, cli_config: Option<&std::path::Path>) -> i3
             println!("result: no usable provider — set a key (smah config init) or export SMAH_<PROVIDER>_API_KEY");
         } else {
             println!("result: {usable} usable provider(s) — ok");
+        }
+        for provider in &literals {
+            println!("warning: {}", literal_warning(provider));
         }
     }
 
@@ -199,6 +251,54 @@ mod tests {
         // openai without a block has no key at all; the others depend on
         // env — assert the structural invariant, not the env.
         assert!(statuses.iter().any(|s| s.key == "openai" && !s.has_key));
+    }
+
+    /// F2 companion: literal keys are flagged; references, `$VAR`, and
+    /// absent keys are not. Keeps the tempdir alive so settings.path()
+    /// stays readable (the shared `settings()` helper drops it).
+    #[test]
+    fn literal_keys_are_flagged_references_are_not() {
+        let dir = tempfile::tempdir().expect("tmp");
+        let path = dir.path().join("config.yaml");
+
+        std::fs::write(&path, KEYED).expect("write");
+        let flagged = Settings::load_from(&path).expect("load");
+        assert_eq!(literal_key_providers(&flagged), vec!["anthropic"]);
+
+        std::fs::write(&path, KEYED.replace("test-key-0000", "$ANTHROPIC_API_KEY")).expect("write");
+        let legacy = Settings::load_from(&path).expect("load");
+        assert!(literal_key_providers(&legacy).is_empty());
+
+        std::fs::write(
+            &path,
+            KEYED.replace("test-key-0000", "keychain:smah/anthropic"),
+        )
+        .expect("write");
+        let stored = Settings::load_from(&path).expect("load");
+        assert!(literal_key_providers(&stored).is_empty());
+
+        std::fs::write(
+            &path,
+            KEYED.replace("test-key-0000", "env:ANTHROPIC_API_KEY"),
+        )
+        .expect("write");
+        let envref = Settings::load_from(&path).expect("load");
+        assert!(literal_key_providers(&envref).is_empty());
+
+        std::fs::write(
+            &path,
+            KEYED.replace("test-key-0000", "file:secrets.yaml#anthropic"),
+        )
+        .expect("write");
+        let fileref = Settings::load_from(&path).expect("load");
+        assert!(literal_key_providers(&fileref).is_empty());
+    }
+
+    #[test]
+    fn literal_warning_names_the_remedy() {
+        let w = literal_warning("openai");
+        assert!(w.contains("openai"));
+        assert!(w.contains("config migrate-secrets"));
     }
 
     #[test]

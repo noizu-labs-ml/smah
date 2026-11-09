@@ -46,9 +46,6 @@ pub const NON_EXECUTION_NOTICE: &str =
 pub const DESTRUCTIVE_BANNER: &str =
     "[!] DESTRUCTIVE — irreversible-class operation (local static classifier; guidance, not a guarantee)";
 
-/// The every-exit footer (RA-03 discoverability fix).
-pub const RESUME_FOOTER: &str = "continue later: smah resume --last";
-
 /// One rendered suggestion block.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedBlock {
@@ -220,7 +217,10 @@ mod tests {
         let class = classify("rm -rf /");
         let value = suggestion_json(&sample(), &class);
         assert_eq!(value["classification"]["level"], "destructive");
-        assert_eq!(value["classification"]["matched"][0], "rm -rf against /");
+        assert_eq!(
+            value["classification"]["matched"][0],
+            "rm -rf against / or a protected path"
+        );
         assert_eq!(value["command"], "journalctl --vacuum-time=7d");
     }
 

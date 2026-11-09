@@ -171,9 +171,13 @@ impl<'a> ChatLoop<'a> {
         std::fs::create_dir_all(self.edit_dir).map_err(|err| SmahError::Internal {
             detail: format!("edit handoff dir: {err}"),
         })?;
-        std::fs::write(&file, &original).map_err(|err| SmahError::Internal {
-            detail: format!("edit handoff write: {err}"),
-        })?;
+        // F6: the handoff file can carry a destructive command — write it
+        // atomically with 0600 (unix) like every other private file.
+        smah_core::secrets::write_private_file_atomic(&file, original.as_bytes()).map_err(
+            |err| SmahError::Internal {
+                detail: format!("edit handoff write: {err}"),
+            },
+        )?;
         io.err(&format!(
             "edit: {} — change the file, then press Enter",
             file.display()
