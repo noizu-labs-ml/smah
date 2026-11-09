@@ -128,6 +128,12 @@ fn run_ask_inner(cli: &Cli, ask: &AskArgs) -> Result<i32, SmahError> {
     }
     let outcome = flow.turn(&mut io, &[], &query, piped.as_deref(), truncation, true)?;
     render_suggestion_blocks(&mut io, &outcome);
+    // Clipboard handoff (owner decision: auto iff exactly one command;
+    // --copy/--no-copy override; confirmations on stderr). JSON mode skips
+    // it — machine output has no side effects.
+    let config_auto = smah_ask::config_auto(&settings);
+    let decision = smah_ask::CopyDecision::resolve(ask.copy, ask.no_copy, config_auto);
+    eprintln!("{}", smah_ask::apply_copy(decision, &outcome).stderr_line());
     Ok(0)
 }
 

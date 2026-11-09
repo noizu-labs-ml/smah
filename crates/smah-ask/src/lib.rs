@@ -9,6 +9,7 @@
 pub mod ask;
 pub mod backend;
 pub mod classify;
+pub mod clipboard;
 pub mod context;
 pub mod prompt;
 pub mod render;
@@ -18,6 +19,7 @@ pub mod suggestion;
 pub use ask::{render_suggestion_blocks, turn_json, AskFlow, AskIo, TurnOutcome};
 pub use backend::{AskBackend, ScriptedBackend, ThreadMessage, ThreadRole};
 pub use classify::{classify, RiskLevel};
+pub use clipboard::{apply_copy, config_auto, copy_to_clipboard, CopyDecision, CopyResult};
 pub use context::{context_message, egress_disclosure, EgressToggles};
 pub use prompt::{query_turn, refine_turn, system_prompt};
 pub use stream::{StreamEvent, StreamFilter};
