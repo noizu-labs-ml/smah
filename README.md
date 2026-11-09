@@ -3,6 +3,16 @@ README
 
 <!-- 〚📁:19cad20d-1e24-5421-be1c-acb4362ae8c6〛 SMAH README :: Project entry point — purpose, install, command surface, config example, and roadmap. -->
 
+> **Python package deprecated (2026-11-09):** the `smah` package on PyPI is frozen at 0.2.0 and
+> deprecated (not yanked — existing `pip` installs keep working, but no further releases ship).
+> SMAH is now a Rust CLI; install it with:
+>
+> ```
+> cargo install --git https://github.com/noizu-labs-ml/smah smah-cli
+> ```
+>
+> This needs a Rust toolchain (MSRV 1.82). The PyPI release workflow (`release.yml`) is retired.
+
 [documentation](https://smah.readthedocs.io/en/latest/)
 
 [git](https://github.com/noizu-labs-ml/smah)
@@ -37,7 +47,14 @@ the best output format, runner model, additional instructions nad other details.
 ## Installation
 
 
-### Pip Install
+### Cargo Install (current)
+```
+cargo install --git https://github.com/noizu-labs-ml/smah smah-cli
+## needs a Rust toolchain (MSRV 1.82); then run smah to begin setup
+smah config
+```
+
+### Pip Install (deprecated — frozen at 0.2.0)
 ```
 pip install smah
 ## call smah to begin setup. 

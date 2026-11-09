@@ -23,7 +23,7 @@ smah/
 ├── tests/               # pytest suite (flat)
 ├── docs/                # Sphinx (source/) + UX specs (ux/) + layout/arch/schema/threat docs
 │   └── source/code/_autosummary/   # GENERATED
-├── .github/workflows/   # ci.yml (pytest) · ci-rs.yml (Rust + no-shell-gate) · release.yml (PyPI OIDC)
+├── .github/workflows/   # ci.yml (pytest) · ci-rs.yml (Rust + no-shell-gate); release.yml (PyPI) retired 2026-11-09
 ├── pyproject.toml       # Poetry; console scripts smah, smah-db
 ├── poetry.lock
 ├── Cargo.toml / Cargo.lock / rust-toolchain.toml   # cargo workspace, stable channel, MSRV 1.82
