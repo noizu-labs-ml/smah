@@ -313,6 +313,12 @@ pub const WRAPPER_PARAM_UNKNOWN: &str =
 /// binding value at invocation; W-series, exit 3).
 pub const WRAPPER_RESOLVE: &str = "smah: wrapper '{name}' did not resolve: {detail}.";
 
+/// The `--prompt` composition failed the model contract (SW-03, W-series,
+/// exit 5 — the answer was not a valid changes object, or the change it
+/// describes cannot produce a loadable recipe; the wrapper is untouched).
+pub const WRAPPER_PROMPT_INVALID: &str =
+    "smah: --prompt for wrapper '{wrapper}' produced an unusable change: {detail}. Nothing was written; rephrase the request or edit the file by hand ('smah wrapper show {wrapper}').";
+
 /// W-series: no wrapper by that name.
 pub fn wrapper_not_found(name: impl AsRef<str>, installed: impl AsRef<str>) -> String {
     fill(
@@ -368,6 +374,17 @@ pub fn wrapper_resolve(name: impl AsRef<str>, detail: impl AsRef<str>) -> String
         WRAPPER_RESOLVE,
         &[
             ("{name}", name.as_ref().to_string()),
+            ("{detail}", detail.as_ref().to_string()),
+        ],
+    )
+}
+
+/// W-series (SW-03): `--prompt` composition unusable.
+pub fn wrapper_prompt_invalid(wrapper: impl AsRef<str>, detail: impl AsRef<str>) -> String {
+    fill(
+        WRAPPER_PROMPT_INVALID,
+        &[
+            ("{wrapper}", wrapper.as_ref().to_string()),
             ("{detail}", detail.as_ref().to_string()),
         ],
     )
@@ -558,6 +575,15 @@ pub enum SmahError {
         /// Why resolution failed, one line.
         detail: String,
     },
+    /// W-series (SW-03) — `--prompt` composition unusable (exit 5: the
+    /// model failed the contract, not the user's config).
+    #[error("{}", wrapper_prompt_invalid(.wrapper, .detail))]
+    WrapperPromptInvalid {
+        /// Wrapper name.
+        wrapper: String,
+        /// Why the change is unusable, one line.
+        detail: String,
+    },
 }
 
 /// Placeholder used only for `Display` on [`SmahError::Internal`]; the real
@@ -589,7 +615,8 @@ impl SmahError {
             SmahError::ProviderRequest { .. }
             | SmahError::ProviderUnavailable { .. }
             | SmahError::Network { .. }
-            | SmahError::DirectiveLoopOverflow { .. } => ExitCode::Provider,
+            | SmahError::DirectiveLoopOverflow { .. }
+            | SmahError::WrapperPromptInvalid { .. } => ExitCode::Provider,
             SmahError::Internal { .. } => ExitCode::Internal,
         }
     }

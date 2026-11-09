@@ -33,6 +33,14 @@ fn main() {
     // The deterministic wrapper flag path (subcommands come after so
     // `smah --wrapper x` works without a subcommand).
     if let Some(name) = &cli.wrapper {
+        // The --prompt compose-review flow (SW-03) subsumes the flag path.
+        if let Some(nl) = &cli.prompt {
+            std::process::exit(wrapper_cmd::run_prompt(name, nl, &cli));
+        }
+        if cli.accept || cli.reject {
+            eprintln!("smah: --accept/--reject only apply together with --prompt");
+            std::process::exit(smah_core::ExitCode::Usage.code());
+        }
         std::process::exit(wrapper_cmd::run_flag(name, &cli.param));
     }
     // Subcommands otherwise; bare `smah` gets the honest not-yet notice
