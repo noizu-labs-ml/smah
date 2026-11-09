@@ -594,3 +594,84 @@ fn tools_list_table_and_empty_dir_notice() {
     );
     assert!(stderr.contains("no virtual tools installed"), "{stderr}");
 }
+
+// ---------------------------------------------------------------------------
+// RA-08 — audit gate: fail-closed writes, fail-open reads
+// ---------------------------------------------------------------------------
+
+/// Break the audit log by making its path a directory (every record fails).
+fn break_audit(sandbox: &Sandbox) {
+    std::fs::create_dir_all(sandbox.audit_log()).expect("audit path becomes a directory");
+}
+
+#[tokio::test]
+async fn broken_audit_log_refuses_write_directives_exit_3() {
+    let sandbox = Sandbox::new();
+    sandbox.tool("saver", "Save a summary.");
+    break_audit(&sandbox);
+    let server = MockServer::start().await;
+    mount(
+        &server,
+        sse("Saving now.\n@@smah write {\"path\": \"out.md\", \"content\": \"the summary body\"}\nDone.\n"),
+        1,
+    )
+    .await;
+
+    let output = sandbox
+        .emulate("saver")
+        .env("ANTHROPIC_BASE_URL", server.uri())
+        .write_stdin("")
+        .output()
+        .expect("run smah");
+    let (code, _, stderr) = run(output);
+
+    // Owner decision 2026-11-09: a write that cannot be audited is refused
+    // outright (exit 3), never silently executed.
+    assert_eq!(code, 3, "stderr: {stderr}");
+    assert!(stderr.contains("FORBIDDEN"), "{stderr}");
+    assert!(stderr.contains("audit gate"), "{stderr}");
+    assert!(
+        !sandbox.notes.join("out.md").exists(),
+        "the unauditable write must not land"
+    );
+}
+
+#[tokio::test]
+async fn broken_audit_log_still_serves_reads() {
+    let sandbox = Sandbox::new();
+    sandbox.tool("reader", "Read and report.");
+    break_audit(&sandbox);
+    std::fs::write(sandbox.notes.join("data.txt"), "42").expect("data fixture");
+    let server = MockServer::start().await;
+    // Turn 1 reads the file; the next request (carrying "File surface
+    // results") is answered with the final text at higher priority.
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .and(body_string_contains("File surface results"))
+        .respond_with(sse("The value is 42.\n"))
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    mount(
+        &server,
+        sse("Reading.\n@@smah read {\"path\": \"data.txt\"}\n"),
+        1,
+    )
+    .await;
+
+    let output = sandbox
+        .emulate("reader")
+        .env("ANTHROPIC_BASE_URL", server.uri())
+        .write_stdin("")
+        .output()
+        .expect("run smah");
+    let (code, stdout, stderr) = run(output);
+
+    // Fail-open for reads: a broken log warns but does not blind help.
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("The value is 42."), "stdout: {stdout}");
+    assert!(
+        stderr.contains("read allowed anyway"),
+        "the warn is explicit: {stderr}"
+    );
+}

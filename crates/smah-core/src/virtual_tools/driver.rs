@@ -248,7 +248,43 @@ pub fn run_with_turns(
         // Deferred, order-preserving execution of this turn's directives.
         let mut results: Vec<String> = Vec::new();
         for directive in &directives {
-            audit_attempt(audit, run_id, tool, directive, turn - 1);
+            // Audit gate (owner decision 2026-11-09): write/append
+            // directives are fail-CLOSED — when the attempt cannot be
+            // recorded the directive is refused outright (exit 3). Reads
+            // stay fail-open (warn and continue): a broken log must not
+            // blind read-only help.
+            if let Err(reason) = audit_attempt(audit, run_id, tool, directive, turn - 1) {
+                if matches!(
+                    directive,
+                    Directive::Write { .. } | Directive::Append { .. }
+                ) {
+                    let detail = format!(
+                        "audit gate: {} refused — audit log unavailable: {reason}",
+                        directive.verb()
+                    );
+                    audit_denied(
+                        audit,
+                        run_id,
+                        tool,
+                        directive.verb(),
+                        directive.path(),
+                        None,
+                        Some(directive.payload_bytes()),
+                        turn - 1,
+                        &detail,
+                    );
+                    sink.notice(&format!(
+                        "smah(virtual): {} {} → FORBIDDEN: {detail}",
+                        tool.name,
+                        directive.verb()
+                    ));
+                    return Err(SmahError::DirectiveViolation {
+                        tool: tool.name.clone(),
+                        detail,
+                    });
+                }
+                eprintln!("smah(virtual): audit log write failed (read allowed anyway): {reason}");
+            }
             match execute_directive(fs_mode, &mut surface, directive) {
                 ExecOutcome::Allowed(line, bytes, resolved, wrote) => {
                     if wrote {
@@ -543,7 +579,13 @@ fn scan_error_detail(err: &ScanError) -> String {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn audit_attempt(audit: &Audit, run_id: &str, tool: &ToolDef, directive: &Directive, turn: usize) {
+fn audit_attempt(
+    audit: &Audit,
+    run_id: &str,
+    tool: &ToolDef,
+    directive: &Directive,
+    turn: usize,
+) -> Result<(), String> {
     let rec = AuditRecord {
         ts: chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, false),
         run: run_id.to_string(),
@@ -556,9 +598,7 @@ fn audit_attempt(audit: &Audit, run_id: &str, tool: &ToolDef, directive: &Direct
         reason: String::new(),
         turn,
     };
-    if let Err(reason) = audit.record(&rec) {
-        eprintln!("smah(virtual): audit log write failed: {reason}");
-    }
+    audit.record(&rec)
 }
 
 #[allow(clippy::too_many_arguments)]
