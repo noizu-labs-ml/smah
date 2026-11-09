@@ -53,8 +53,7 @@ smah/                                # repo root (trl-infra submodule at Project
 │   └── make.bat                     # Sphinx build (Windows)
 ├── .github/workflows/
 │   ├── ci.yml                       # pytest matrix 3.10/3.12/3.13; PRs + pushes to develop/stage/main
-│   ├── ci-rs.yml                    # Rust CI: fmt/clippy/test (linux+macos) + no-shell-gate; SHA-pinned actions
-│   └── release.yml                  # PyPI Trusted Publishing (OIDC) on v* tags
+│   └── ci-rs.yml                    # Rust CI: fmt/clippy/test (linux+macos) + no-shell-gate; SHA-pinned actions
 ├── pyproject.toml                   # Poetry packaging; console scripts: smah, smah-db
 ├── poetry.lock                      # locked dependency set
 ├── Cargo.toml / Cargo.lock          # cargo workspace manifest + lockfile (crates/*)
