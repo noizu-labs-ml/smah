@@ -133,6 +133,12 @@ pub struct AskArgs {
     /// Additional operator instructions for this ask (a text file).
     #[arg(short = 'i', long, value_name = "PATH")]
     pub instructions: Option<PathBuf>,
+
+    /// Emit machine-readable JSON on stdout instead of streamed prose +
+    /// blocks (place before the question). Diagnostics stay on stderr;
+    /// exit codes are unchanged.
+    #[arg(long)]
+    pub json: bool,
 }
 
 /// `smah tools ...`

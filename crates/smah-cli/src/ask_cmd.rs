@@ -110,6 +110,22 @@ fn run_ask_inner(cli: &Cli, ask: &AskArgs) -> Result<i32, SmahError> {
     let mut io = ConsoleIo {
         out_tty: std::io::stdout().is_terminal(),
     };
+    if ask.json {
+        // Machine mode (§5): no streaming prose, no block rendering — one
+        // JSON object on stdout (still content-only; diagnostics stderr).
+        let outcome = flow.turn(&mut io, &[], &query, piped.as_deref(), truncation, false)?;
+        io.out_line(
+            &serde_json::to_string_pretty(&smah_ask::turn_json(
+                &outcome,
+                backend.model(),
+                backend.provider_key(),
+            ))
+            .map_err(|err| SmahError::Internal {
+                detail: format!("json encode: {err}"),
+            })?,
+        );
+        return Ok(0);
+    }
     let outcome = flow.turn(&mut io, &[], &query, piped.as_deref(), truncation, true)?;
     render_suggestion_blocks(&mut io, &outcome);
     Ok(0)

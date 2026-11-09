@@ -1,6 +1,7 @@
 CHANGE LOG
 ==============
 ## 2026-11-10
+- rust-ask RA-04: `smah ask --json` — one parseable JSON object on stdout (model/provider/answer/suggestions with classification), prose streaming off in json mode; non-TTY contract locked by tests (stdout = content only, no ANSI/chrome, diagnostics stderr) and exit codes survive piping incl. provider 401→4, 500→5, usage→2. 5 new wiremock contract tests.
 - rust-ask RA-01: `smah ask "<question>"` one-shot answering — behavior-contract system prompt + operator/system context gated by privacy.share_profile/share_system_stats, streaming turn (prose live on stdout, <exec> bodies held then rendered as numbered blocks), piped stdin attached as data with a loud truncation notice (model told via marker), keyless provider fails fast exit 4; smah-ask grows ask/backend/context/prompt/stream modules (AskBackend seam + scripted test double), smah-cli gains the Ask subcommand. 58 unit + 5 wiremock contract tests.
 - rust-ask RA-02: smah-ask crate foundation — model <exec> tag parser (title/purpose/command + owner-approved <risk>/<touches> children, <cot> dropped, malformed tags degrade to prose), local static risk classifier (rm -rf /, dd of=/dev/*, mkfs*, iptables -F, chmod -R 777 /, fork bombs, curl|sh, redirect-to-device; quoted spans ignored; quoted fork bombs still escalate) that always escalates irreversible-class patterns to the red [!] DESTRUCTIVE banner labelled guidance-not-a-guarantee, and TTY/plain/JSON suggestion rendering (numbered blocks, model-guidance labels). 29 unit tests.
 ## 2026-11-09
