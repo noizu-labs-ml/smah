@@ -13,8 +13,8 @@
 //! - [`loader`]: parse/validate/discover `~/.config/smah/wrappers/*.md`
 //! - [`cast`]: asciinema v2 `.cast` parsing + ANSI stripping (pure Rust)
 //! - [`builtin`]: the compiled-in tool registry (`cast-to-text`)
-//! - [`resolve`] (SW-02): the `{{params.x}}` / `{{steps.y.output}}` binding
-//!   engine and the deterministic plan renderer
+//! - [`resolve`]: the `{{params.x}}` / `{{steps.y.output}}` binding engine
+//!   and the deterministic plan renderer
 //! - [`prompt`] (SW-03): the `--prompt` inference composer — structured
 //!   recipe diff, review flow, provenance stamp, (wrapper, prompt) cache
 //!
@@ -25,6 +25,7 @@
 pub mod builtin;
 pub mod cast;
 pub mod loader;
+pub mod resolve;
 
 /// Maximum number of steps one wrapper may declare (load-time cap; a
 /// longer recipe is abuse of the format, not a pipeline).
