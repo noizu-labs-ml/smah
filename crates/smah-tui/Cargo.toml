@@ -7,6 +7,12 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+# Leaf presentation crate: smah-core's virtual-tools driver family reaches
+# this crate (the frozen `--emulate` dispatch calls `drivers::tui::run` in
+# smah-core, so the TTY presentation must be linked from there — the old
+# smah-core dependency went the other way and is gone). No smah-core types
+# appear in this crate's API: plain strings only.
 [dependencies]
-smah-core = { path = "../smah-core" }
-smah-providers = { path = "../smah-providers" }
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+serde_json = { workspace = true }

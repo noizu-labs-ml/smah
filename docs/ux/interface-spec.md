@@ -1,5 +1,7 @@
 # SMAH Interface Spec
 
+<!-- 〚📁:986ed411-6cdf-5487-a507-e27958c127d4〛 Interface Spec :: Normative CLI/UX contract — command surface, stdout/stderr split, exit codes. -->
+
 The concrete CLI design for the recovered SMAH. Implements binding decisions 1–3: print-only execution, Claude-default provider abstraction (`claude-opus-5-5` query/pipe/chat, `claude-haiku-5-5` picker), and the subcommand surface with exit codes `0 ok · 2 usage · 3 config · 4 auth-or-no-models · 5 provider`.
 
 Everything here is forward-looking design except where marked **today**, in which case it cites current behavior from `capability-inventory.md` at HEAD `d803586`.

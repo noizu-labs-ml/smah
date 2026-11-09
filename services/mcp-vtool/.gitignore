@@ -1,0 +1,4 @@
+# Elixir build artifacts — regenerable, never committed.
+/_build/
+/deps/
+/.elixir_ls/
