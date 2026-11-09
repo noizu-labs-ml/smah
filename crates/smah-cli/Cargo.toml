@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 smah-core = { path = "../smah-core" }
+smah-ask = { path = "../smah-ask" }
 smah-providers = { path = "../smah-providers" }
 smah-tui = { path = "../smah-tui" }
 clap = { workspace = true }

@@ -3112,6 +3112,7 @@ dependencies = [
  "predicates",
  "serde_json",
  "sha2",
+ "smah-ask",
  "smah-core",
  "smah-providers",
  "smah-tui",
