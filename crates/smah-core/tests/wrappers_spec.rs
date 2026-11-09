@@ -31,7 +31,9 @@ description: Turn an asciinema session recording into a text transcript
 model: anthropic.claude-fixture-1
 behavior_prompt: |
   You are a terminal-session assistant. You adjust transcript recipes.
-approved: 2026-11-09T12:00:00-08:00
+approved:
+  at: 2026-11-09T12:00:00-08:00
+  sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 params:
   - name: cast_file
     description: Path to the .cast recording

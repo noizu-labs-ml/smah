@@ -4,6 +4,7 @@
 //! (metadata + redaction), failure and timeout handling. Everything runs
 //! in a sandboxed env tree; fixed argv only (no shell anywhere).
 
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use assert_cmd::Command;
@@ -43,6 +44,23 @@ impl Sandbox {
         std::fs::write(self.wrappers.join(format!("{name}.md")), body).expect("wrapper fixture");
     }
 
+    /// Stamp the wrapper exactly the way `smah-run approve` does (C1):
+    /// the content-bound {at, sha256} mapping over the executable sections.
+    fn approve(&self, name: &str) {
+        let path = self.wrappers.join(format!("{name}.md"));
+        let raw = std::fs::read_to_string(&path).expect("read wrapper");
+        let def = smah_core::wrappers::loader::parse_wrapper(&raw, name, &HashSet::new())
+            .expect("fixture loads");
+        let stamp = smah_core::wrappers::approval::stamp_for(&def, "2026-11-09T09:00:00-08:00");
+        let mut stamped = def.clone();
+        stamped.approved = Some(stamp);
+        std::fs::write(
+            &path,
+            smah_core::wrappers::prompt::render_wrapper_file(&stamped),
+        )
+        .expect("write stamp");
+    }
+
     fn runner(&self, args: &[&str]) -> Command {
         let mut cmd = Command::cargo_bin("smah-run").expect("smah-run binary");
         cmd.env("SMAH_WRAPPERS_DIR", &self.wrappers)
@@ -57,10 +75,11 @@ impl Sandbox {
     }
 }
 
-/// Approved three-step recipe: output binding, substitution into a later
-/// argv, and an observable filesystem effect.
+/// Three-step recipe: output binding, substitution into a later argv, and
+/// an observable filesystem effect. Unstamped in the fixture — tests that
+/// execute stamp it via `Sandbox::approve` (C1).
 const APPROVED: &str = "---\n\
-name: demo\ndescription: fixture recipe\napproved: 2026-11-09T09:00:00-08:00\n\
+name: demo\ndescription: fixture recipe\n\
 params:\n  - name: out_dir\n    required: true\n\
 steps:\n  - id: greet\n    run: [\"echo\", \"hello\"]\n    output: greeting\n  - id: shout\n    run: [\"echo\", \"{{steps.greet.output}}!\"]\n    output: shouted\n  - id: mark\n    run: [\"touch\", \"{{params.out_dir}}/done.txt\"]\n    timeout_secs: 5\n\
 outputs:\n  - name: greeting\n  - name: shouted\n---\n";
@@ -89,9 +108,10 @@ fn execute_without_an_approved_stamp_refuses() {
     );
     sb.runner(&["shy", "--execute", "--yes"])
         .assert()
-        .code(3)
-        .stderr(predicates::str::contains("approved:"))
-        .stderr(predicates::str::contains("refused"));
+        .code(4)
+        .stderr(predicates::str::contains("refused"))
+        .stderr(predicates::str::contains("no approval stamp"))
+        .stderr(predicates::str::contains("smah-run approve"));
     assert!(!sb.audit.exists(), "nothing ran, nothing audited");
 }
 
@@ -99,6 +119,7 @@ fn execute_without_an_approved_stamp_refuses() {
 fn execute_on_a_pipe_without_yes_refuses() {
     let sb = Sandbox::new();
     sb.wrapper("demo", APPROVED);
+    sb.approve("demo");
     sb.runner(&["demo", "--param", "out_dir=x", "--execute"])
         .write_stdin("")
         .assert()
@@ -111,6 +132,7 @@ fn execute_on_a_pipe_without_yes_refuses() {
 fn execute_yes_runs_steps_binds_outputs_and_audits() {
     let sb = Sandbox::new();
     sb.wrapper("demo", APPROVED);
+    sb.approve("demo");
     let out_dir = sb.out.display().to_string();
     sb.runner(&[
         "demo",
@@ -130,14 +152,26 @@ fn execute_yes_runs_steps_binds_outputs_and_audits() {
     assert!(sb.out.join("done.txt").exists(), "the touch step ran");
     let audit = std::fs::read_to_string(&sb.audit).expect("audit jsonl");
     let lines: Vec<&str> = audit.lines().collect();
-    assert_eq!(lines.len(), 3, "one record per step: {audit}");
-    for (i, line) in lines.iter().enumerate() {
-        let rec: serde_json::Value = serde_json::from_str(line).expect("audit line is json");
-        assert_eq!(rec["decision"], "executed");
+    assert_eq!(lines.len(), 6, "started+finished per step (C2): {audit}");
+    let started: Vec<serde_json::Value> = lines
+        .iter()
+        .map(|l| serde_json::from_str::<serde_json::Value>(l).expect("audit line is json"))
+        .filter(|rec| rec["decision"] == "started")
+        .collect();
+    assert_eq!(started.len(), 3, "one started record per step: {audit}");
+    for (i, rec) in started.iter().enumerate() {
         assert_eq!(rec["step"], ["greet", "shout", "mark"][i]);
         let argv = rec["argv"].as_str().unwrap();
         assert!(argv.starts_with(["echo", "echo", "touch"][i]), "{argv}");
     }
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|l| l.contains("\"decision\":\"finished\""))
+            .count(),
+        3,
+        "every started step finished: {audit}"
+    );
 }
 
 #[test]
@@ -145,8 +179,9 @@ fn failing_step_aborts_the_run_with_exit_1() {
     let sb = Sandbox::new();
     sb.wrapper(
         "bad",
-        "---\nname: bad\ndescription: fails fast\napproved: 2026-11-09T09:00:00-08:00\nsteps:\n  - id: s1\n    run: [\"false\"]\n---\n",
+        "---\nname: bad\ndescription: fails fast\nsteps:\n  - id: s1\n    run: [\"false\"]\n---\n",
     );
+    sb.approve("bad");
     sb.runner(&["bad", "--execute", "--yes"])
         .write_stdin("")
         .assert()
@@ -154,7 +189,9 @@ fn failing_step_aborts_the_run_with_exit_1() {
         .stderr(predicates::str::contains("failed"))
         .stderr(predicates::str::contains("exit status 1"));
     let audit = std::fs::read_to_string(&sb.audit).expect("audit jsonl");
-    assert!(audit.contains("\"decision\":\"failed\""), "{audit}");
+    assert!(audit.contains("\"decision\":\"started\""), "{audit}");
+    assert!(audit.contains("\"decision\":\"finished\""), "{audit}");
+    assert!(audit.contains("exit status 1"), "{audit}");
 }
 
 #[test]
@@ -162,8 +199,9 @@ fn timeout_kills_the_step() {
     let sb = Sandbox::new();
     sb.wrapper(
         "slow",
-        "---\nname: slow\ndescription: sleeps\napproved: 2026-11-09T09:00:00-08:00\nsteps:\n  - id: s1\n    run: [\"sleep\", \"30\"]\n    timeout_secs: 1\n---\n",
+        "---\nname: slow\ndescription: sleeps\nsteps:\n  - id: s1\n    run: [\"sleep\", \"30\"]\n    timeout_secs: 1\n---\n",
     );
+    sb.approve("slow");
     sb.runner(&["slow", "--execute", "--yes"])
         .write_stdin("")
         .assert()
@@ -190,11 +228,12 @@ fn builtins_execute_in_process_and_bind() {
     sb.wrapper(
         "transcribe",
         "---\n\
-name: transcribe\ndescription: cast to text\napproved: 2026-11-09T09:00:00-08:00\n\
+name: transcribe\ndescription: cast to text\n\
 params:\n  - name: cast_file\n    required: true\n\
 steps:\n  - id: to-text\n    use: cast-to-text\n    description: Convert cast events\n    with: {cast_file: \"{{params.cast_file}}\"}\n    output: text\n\
 outputs:\n  - name: text\n---\n",
     );
+    sb.approve("transcribe");
     sb.runner(&[
         "transcribe",
         "--param",

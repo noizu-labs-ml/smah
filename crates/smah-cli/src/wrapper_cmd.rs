@@ -214,7 +214,7 @@ fn validate(name: &str) -> i32 {
                 wrapper.steps.len(),
                 wrapper.params.len(),
                 if wrapper.approved.is_some() {
-                    ", approved for execution"
+                    ", approval stamp present (integrity re-verified at execution)"
                 } else {
                     ", not approved for execution"
                 }
@@ -281,9 +281,10 @@ pub fn run_argv0_dispatch() -> Option<i32> {
 /// The `--prompt` compose-review flow (SW-03): inference as a recipe
 /// composer. The model returns a structured changes object; it is applied
 /// in memory, re-validated through the full loader, and rendered as a diff.
-/// Nothing is written until an explicit accept — and accepting IS the
-/// approval review `smah-run --execute` later demands (provenance +
-/// `approved:` stamps land together). Still print-only otherwise.
+/// Nothing is written until an explicit accept — and accepting reviews the
+/// RECIPE only: approval is never carried or added (C1 — the composed file
+/// stays unapproved until a separate `smah-run approve <name>` stamps it).
+/// Still print-only otherwise.
 pub fn run_prompt(name: &str, nl: &str, cli: &Cli) -> i32 {
     if cli.accept && cli.reject {
         eprintln!("smah: --accept and --reject are mutually exclusive");
@@ -347,7 +348,7 @@ fn prompt_flow(name: &str, nl: &str, cli: &Cli) -> Result<i32, SmahError> {
     // a diff that cannot produce a loadable recipe is a contract failure,
     // not a reviewable proposal.
     let tool_names = prompt::current_tool_names();
-    let (mut new_def, content) =
+    let (new_def, content) =
         prompt::apply_changes(&wrapper, &changes, &tool_names).map_err(|detail| {
             SmahError::WrapperPromptInvalid {
                 wrapper: name.to_string(),
@@ -408,15 +409,19 @@ fn prompt_flow(name: &str, nl: &str, cli: &Cli) -> Result<i32, SmahError> {
                 detail: format!("cannot write the proposal: {err}"),
             })?;
             println!(
-                "proposal written to {}. Edit it, add an 'approved:' stamp, then replace {} by hand.",
+                "proposal written to {}. Edit it, replace {} with it, then stamp approval with 'smah-run approve {name}'.",
                 proposed.display(),
                 wrapper.path.display()
             );
             Ok(0)
         }
         _ => {
-            // Accepting the diff is the review: stamp approval + provenance.
-            new_def.approved = Some(prompt::now_rfc3339());
+            // Accepting the diff reviews the RECIPE — never the approval
+            // (C1): apply_changes has already stripped any stamp (model
+            // output cannot carry or create approval). The composed file is
+            // written UNAPPROVED; execution requires the explicit
+            // `smah-run approve <name>` content-hash stamp afterwards.
+            debug_assert!(new_def.approved.is_none(), "approval must be stripped");
             let mut provenance = prompt::extract_provenance(&raw);
             provenance.push(stamp);
             let final_content =
@@ -438,7 +443,7 @@ fn prompt_flow(name: &str, nl: &str, cli: &Cli) -> Result<i32, SmahError> {
                 detail: format!("cannot replace: {err}"),
             })?;
             println!(
-                "smah: applied + approved {}. Plan it with 'smah --wrapper {name}'; execution lives in smah-run.",
+                "smah: applied {} (NOT approved — execution needs the content-bound stamp: 'smah-run approve {name}').",
                 wrapper.path.display()
             );
             Ok(0)

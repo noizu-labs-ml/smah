@@ -25,7 +25,7 @@ argv — dry-run by default, per-step confirmation + timeouts,
 metadata-only redacted audit; model output enters only as a structured,
 re-validated changes object behind an explicit accept).
 
-**Register (35)**: 21 mitigated · 8 partial · 3 open · 3 accepted.
+**Register (36)**: 23 mitigated · 7 partial · 3 open · 3 accepted.
 
 | ID | Sev | Item | Status |
 |----|-----|------|--------|
@@ -60,10 +60,11 @@ re-validated changes object behind an explicit accept).
 | T-029 | Med | Real-vs-virtual confusion: fabricated DB mistaken for a real one (#24) | Partial |
 | T-030 | Low | Wire-level abuse of the db/vfs/mcp servers (oversize, statement bombs, write attempts) | Mitigated |
 | T-031 | Med | Wrapper `run:` step argv/PATH hijack — malicious recipe or reordered PATH runs an attacker binary (SW-05) | Partial |
-| T-032 | Med | smah-run audit bypass — killed/interrupted process leaves an executed step unaudited | Partial |
+| T-032 | Med | smah-run audit bypass — killed/interrupted process leaves an executed step unaudited | Mitigated |
 | T-033 | Med | `--prompt` recipe injection — model output rewrites the recipe (SW-03) | Mitigated |
 | T-034 | Low | Secret leakage via prompt cache on disk / audit argv lines (SW-03/05) | Mitigated |
 | T-035 | Low | Output-capture exhaustion — runaway step stdout into `{{steps.*}}` bindings | Mitigated |
+| T-036 | Med | Approval forgery / stale-stamp transfer — hand-edited or stale `approved:` executes unreviewed changes (SW-05) | Mitigated |
 
 **Key controls (verified)**: print-only test + CI grep gate (Rust gate
 amended to execution primitives only — `Command::new`/`process::Command`/
@@ -87,11 +88,16 @@ two-strikes bounded catalog fabrication + digest-keyed frozen
 db PG-wire subset (writes `42501`, extended/multi-statement `0A000`,
 size caps `54000`, read-only store, one sequential connection) ·
 wrapper B8 controls: strict loader re-validation of every `--prompt`
-result before review, explicit-accept-only writes with provenance +
-`approved:` stamps, sha-keyed composition cache with validate-on-hit,
-dry-run-default executor gated on approval + `--yes`/per-step confirm,
-fixed argv (never a shell), per-step timeouts, 1 MiB output cap,
-metadata-only redacted audit JSONL.
+result before review, explicit-accept-only writes with provenance stamps
+(acceptance NEVER carries approval — composition strips it), sha-keyed
+composition cache with validate-on-hit, dry-run-default executor gated on
+a content-bound `approved: {at, sha256}` stamp re-verified at execution
+(exit 4 on mismatch; stamps written only by `smah-run approve` — TTY y/N
+or explicit `--yes-i-reviewed-this`) + `--yes`/per-step confirm,
+fixed argv (never a shell), per-step timeouts killing the whole process
+group, audit-before-execution (fsync'd `started` record, fail-closed),
+1 MiB output cap + 10 MiB/64 MiB `.cast` caps, escape-stripped transcripts,
+every audit param value name+sha256-prefix unless `audit: plain`.
 
 **Residual**: local attacker reads all plaintext stores (accepted — same-account
 attacker is game over); user pastes a suggested command (accepted trade-off);

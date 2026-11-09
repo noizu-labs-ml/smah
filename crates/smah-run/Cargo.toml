@@ -15,6 +15,10 @@ serde_json = { workspace = true }
 uuid = { workspace = true }
 # Approval/audit timestamps (local time with offset, repo convention).
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# Process-group signalling on timeout (H1): SIGTERM/SIGKILL to the whole
+# group of a step spawned via process_group(0). Unix-only dependency.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
