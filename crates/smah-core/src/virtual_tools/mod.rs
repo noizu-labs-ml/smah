@@ -49,10 +49,11 @@ pub const DEFAULT_INPUT_BYTES: usize = 256 * 1024;
 
 /// Tool names and subcommand words a virtual tool may not claim (current +
 /// planned M5 surface — prevents `smah hooks`/`smah tools` ambiguity and the
-/// `-c/--config` confusion class).
-pub const RESERVED_NAMES: [&str; 12] = [
+/// `-c/--config` confusion class). `wrapper` joined with the script-wrapper
+/// epic (SW-01): `smah wrapper …` is a subcommand now.
+pub const RESERVED_NAMES: [&str; 13] = [
     "ask", "chat", "history", "resume", "config", "models", "doctor", "hooks", "tools", "emulate",
-    "help", "version",
+    "wrapper", "help", "version",
 ];
 
 /// The base directive verbs the **cli** driver's scanners accept. Driver
