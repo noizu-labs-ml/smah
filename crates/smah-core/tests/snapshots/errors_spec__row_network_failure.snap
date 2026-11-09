@@ -1,0 +1,5 @@
+---
+source: crates/smah-core/tests/errors_spec.rs
+expression: error.render(LOG)
+---
+smah: can't reach provider "anthropic" (connection timed out). Check network/DNS, then retry. Full log: /home/tester/.smah/logs/smah.20260101_000000.log.

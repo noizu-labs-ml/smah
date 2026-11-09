@@ -1,0 +1,5 @@
+---
+source: crates/smah-core/tests/errors_spec.rs
+expression: error.render(LOG)
+---
+smah: provider "anthropic" rejected the request (HTTP 404): model not found: claude-turbo. Check model ids with 'smah models list'. Full log: /home/tester/.smah/logs/smah.20260101_000000.log.

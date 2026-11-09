@@ -1,0 +1,5 @@
+---
+source: crates/smah-core/tests/errors_spec.rs
+expression: error.render(LOG)
+---
+smah: tool 'log-analyzer' did not finish within 8 turns of file operations. Try smaller input; the audit log shows what it attempted. Full log: /home/tester/.smah/logs/smah.20260101_000000.log.

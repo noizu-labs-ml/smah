@@ -1,0 +1,5 @@
+---
+source: crates/smah-core/tests/errors_spec.rs
+expression: error.render(LOG)
+---
+smah: no virtual tool named 'log-analyzer'. Installed: (none). Run 'smah tools list'. Full log: /home/tester/.smah/logs/smah.20260101_000000.log.
