@@ -42,6 +42,12 @@ SMAH is designed to:
 - **Print-Only Commands (Safety)**: For safety, SMAH never runs commands. Each suggested command is printed in a clearly delimited block with an explanation of what it does and its expected impact, ready for you to copy and run yourself. If pyperclip is installed the command is also copied to your clipboard.
 - **Model Planning/Prompt Planning**: A fast model is used to look at a sample of pipe data or your inquiry in order to decide
 the best output format, runner model, additional instructions nad other details.
+- **Script Wrappers (Rust build)**: Save a reusable, ordered recipe of steps as a markdown file in
+  `~/.config/smah/wrappers/<name>.md` (`use:` built-in tools like `cast-to-text`, or `run:` fixed argv — never a shell line).
+  `smah --wrapper <name> [--param k=v]` prints the resolved plan and the exact `smah-run` invocation; `smah --wrapper <name> --prompt "<change>"`
+  has a model compose a structured recipe diff you review and accept (provenance + approval stamped); the companion `smah-run`
+  binary is the only component that executes — saved, `approved:`-stamped recipes only, dry-run by default, per-step confirmation,
+  per-step timeouts, metadata-only redacted audit. Format and UX: `docs/ux/wrappers.md`; examples in `examples/wrappers/`.
 
 
 ## Installation

@@ -1,6 +1,6 @@
 # mallm → SMAH Fold-In Plan (Phased Rust Port)
 
-Session: d4114180-f0b7-4eee-84db-d92cb1f23def · Owner decisions: 2026-11-09 (§8 Decisions; Q5–Q7 carried as assumptions pending owner) · Status: DECIDED (P0 owner-gates resolved)
+Session: d4114180-f0b7-4eee-84db-d92cb1f23def · Owner decisions: 2026-11-09 (§8 Decisions D1–D4) + 2026-11-10 (D5–D7, promoted from the Q5–Q7 assumptions) · Status: DECIDED (P0 owner-gates resolved)
 
 Smah citations refer to the `epic.rust-tui` tree (`git show epic.rust-tui:<path>`); mallm citations to
 `/Users/keithbrings/Work/Space/Noizu/Projects/mallm` (read-only, current checkout).
@@ -48,7 +48,7 @@ parity; retirement is a separate owner call.
 | `src/index.ts` (commander, 892 lines) | `crates/smah-cli/src/args.rs` `Docs` subcommand | **port (subset)** | clap 4 tree already hosts `Tools`/`Hooks` (`args.rs:106-136`); N2/N4 verbs excluded |
 | `src/init.ts` | `smah docs init` | **port (file/stdin seed)** | Stub creation is a file write; `--help` seeding via `execSync` (`init.ts:17`) replaced by piped input (§4-A) |
 | `src/config/loader.ts` + `types.ts` | `~/.smah/config.yaml` `docs:` block | **port + converge** | smah-core settings are Value-centric (`crates/smah-core/src/settings/mod.rs:1`); chain `.mallm/config.yaml` → user → defaults preserved (§5) |
-| `src/corpus/adapters.ts` | `smah-docs::corpus` | **port http + dir; drop git (v1)** | http via reqwest/rustls (workspace dep); git adapter shells out via `execFile` (`adapters.ts:44`) → N1 (§8 A7-risk) |
+| `src/corpus/adapters.ts` | `smah-docs::corpus` | **port http + dir; drop git (v1)** | http via reqwest/rustls (workspace dep); git adapter shells out via `execFile` (`adapters.ts:44`) → N1 (§8 R7) |
 | `src/corpus/cache.ts`, `merge.ts` | `smah-docs::corpus::cache` | **port** | Follows existing validate-then-freeze + sha256-marker convention (T-021, `docs/THREAT-MODEL.md:69`) |
 | `src/search/bm25.ts` + `corpus.ts` | `smah-docs::search` | **port** | Hand-rolled BM25 (111 lines), pure |
 | `src/session/{kv,token,index}.ts` | SMAH SQLite store | **reuse store / drop glyph tokens** | Glyph tokens + approvals exist to gate how-to execution (`mallm/docs/PROJ-SCHEMA.summary.md`); with N2 they have no consumer |
@@ -87,7 +87,7 @@ stays storage-agnostic).
 - `validate(spec) -> Result<(), Vec<Violation>>` — structural validation against the vendored schema
   (embedded via `include_str!`). Recommendation: pull the maintained `jsonschema` crate as a dev+prod
   dep rather than hand-rolling draft 2020-12 semantics; keep the JSON file as the single source of
-  truth (§8 A6).
+  truth (§8 D6).
 - `format_md(doc) -> String` / `format_json(doc, meta) -> String` — `_meta` carries source + timestamp
   like `mallm/src/formatter.ts`; color is a smah-cli concern (pulldown-cmark/rich styling lives there),
   goldens captured `--no-color`.
@@ -183,7 +183,7 @@ P1 may start immediately; P3 hard-depends on epic milestone M4 (SQLite/smah-db p
 
 | Phase | Scope | Exit criteria |
 |---|---|---|
-| **P0 — spec freeze** | Vendor `mallm.schema.json`; delta record (`howtos[]` not in schema — excluded with N2); owner answers recorded | Schema committed + checksum pinned; D1–D4 decided 2026-11-09 (§8), A5–A7 carried as assumptions; feature-parity matrix drafted |
+| **P0 — spec freeze** | Vendor `mallm.schema.json`; delta record (`howtos[]` not in schema — excluded with N2); owner answers recorded | Schema committed + checksum pinned; D1–D4 decided 2026-11-09 (§8), D5–D7 decided 2026-11-10 (§8); feature-parity matrix drafted |
 | **P1 — crate core** | `smah-docs` scaffold, `DocSpec`, resolver tiers 1–2, validator, MD/JSON formatter, `smah docs show/list/validate/schema` | `cargo test` + `no-shell-gate` green; formatter goldens byte-parity with Node `--no-color` on `mallm/examples/*.mallm.yaml`; exit-code rows snapshot-tested |
 | **P2 — parity core** | help-parser port, `init` from stdin/file, BM25 search, corpus http+dir + cache, `sources` verbs, **jev quiz/learn + memory/knowledge.yaml port (D4 — provider-backed, no exec)** | Every file-based mallm verb reproducible via `smah docs`; corpus cache markers/caps match T-021 pattern; piped-init flow documented; jev features run through smah-providers/hosted Jev with no-shell-gate green |
 | **P3 — state convergence** | config `docs:` block, SQLite history + JSONL import + redactor, `smah docs migrate`, doctor checks | Migrate imports a fixture XDG tree idempotently; history queryable through smah's history surface; doctor rows green; M4 landed first |
@@ -236,7 +236,7 @@ Features enter `epic.rust-tui` via squash PRs (one ticket ≈ one `feature/mallm
 - R7 Corpus git adapter dropped in v1: git-sourced corpora stay Node-mallm-only until an exec-free
       fetch (e.g. dumb-HTTP) is justified — tracked as a parity-matrix waiver, not a silent gap.
 
-**Decisions (2026-11-09, owner)**
+**Decisions (owner — D1–D4 2026-11-09 · D5–D7 2026-11-10)**
 
 1. **D1 — exec decision (was Q1, §4):** Option C — corpus-only + user-piped help now; `HelpCapture`
    seam kept; any exec reader (Option B) requires a further explicit owner decision.
@@ -246,12 +246,9 @@ Features enter `epic.rust-tui` via squash PRs (one ticket ≈ one `feature/mallm
    stays Node-only until the P6 spin-out hand-off.
 4. **D4 — jev quiz/learn + memory/knowledge.yaml (was Q4):** port in P2; jev inference goes through
    `smah-providers` or the hosted Jev endpoint, with no exec (tickets SM-19/SM-20).
-
-**Assumptions (pending owner, 2026-11-09)**
-
-5. **A5 (was Q5) — history target:** ASSUMED import JSONL into `smah.db` SQLite (single store,
-   §5 table); pending owner confirmation before SM-14 lands.
-6. **A6 (was Q6) — validation engine:** ASSUMED the maintained `jsonschema` crate against the
-   vendored schema; pending owner confirmation before SM-05 lands.
-7. **A7 (was Q7) — retirement trigger:** ASSUMED parity matrix + explicit owner call (no usage
-   signal gate); pending owner confirmation before P6 opens.
+5. **D5 — history target (was Q5, assumed 2026-11-09):** SQLite `smah.db` as the single history
+   store — import `history.jsonl` (§5 table); owner confirmed 2026-11-10.
+6. **D6 — validation engine (was Q6, assumed 2026-11-09):** the maintained `jsonschema` crate
+   against the vendored `mallm.schema.json`; owner confirmed 2026-11-10.
+7. **D7 — retirement trigger (was Q7, assumed 2026-11-09):** parity matrix all green + an explicit
+   owner call (no usage-signal gate); owner confirmed 2026-11-10; gates P6.
