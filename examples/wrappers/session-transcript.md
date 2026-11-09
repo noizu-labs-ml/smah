@@ -34,7 +34,10 @@ Plan only, until you hand it to the companion executor:
 
     smah --wrapper session-transcript --param cast_file=~/sessions/last.cast
     smah-run session-transcript --param cast_file=~/sessions/last.cast   # dry-run
-    smah-run session-transcript --param cast_file=~/sessions/last.cast --execute --yes
 
-This file carries no `approved:` stamp — add one (or accept a `--prompt`
-diff) before expecting `smah-run --execute` to run it.
+This file carries no `approved:` stamp, and `--prompt` diffs can never add
+one — review the plan, then stamp it yourself (the stamp binds this file's
+executable content; any later edit invalidates it):
+
+    smah-run approve session-transcript          # review, then y/N (TTY)
+    smah-run session-transcript --param cast_file=~/sessions/last.cast --execute --yes

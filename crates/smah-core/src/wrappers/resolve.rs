@@ -17,6 +17,7 @@
 use std::collections::BTreeMap;
 
 use crate::errors::SmahError;
+use crate::wrappers::approval::ApprovalStamp;
 use crate::wrappers::builtin::{self, BuiltinTool};
 use crate::wrappers::loader::{WrapperDef, WrapperOutput, WrapperStep};
 
@@ -55,7 +56,10 @@ pub enum ResolvedStepKind {
 pub struct ResolvedPlan {
     pub name: String,
     pub description: String,
-    pub approved: Option<String>,
+    /// The wrapper's approval stamp as loaded (integrity is verified at
+    /// execution time by smah-run, not here — the plan printer is honest
+    /// about what the file claims, not what it proves).
+    pub approved: Option<ApprovalStamp>,
     pub steps: Vec<ResolvedStep>,
     pub outputs: Vec<WrapperOutput>,
     pub preconditions: Vec<String>,
@@ -239,9 +243,13 @@ pub fn render_plan(plan: &ResolvedPlan) -> String {
         plan.name, plan.description
     ));
     match &plan.approved {
-        Some(ts) => out.push_str(&format!("approval: approved {ts} (smah-run --execute may run this)\n")),
+        Some(stamp) => out.push_str(&format!(
+            "approval: approved {} — stamp binds content sha256 {}… (smah-run --execute re-verifies it; edits after approval refuse with exit 4)\n",
+            stamp.at,
+            &stamp.sha256[..stamp.sha256.len().min(12)]
+        )),
         None => out.push_str(
-            "approval: NOT approved — plan/dry-run only. Add `approved: <rfc3339>` after review to enable `smah-run --execute`.\n",
+            "approval: NOT approved — plan/dry-run only. Review this plan, then stamp it with `smah-run approve <name>` to enable `smah-run --execute`.\n",
         ),
     }
     if !plan.preconditions.is_empty() {
@@ -459,11 +467,21 @@ steps:\n  - id: convert\n    use: cast-to-text\n    with: {cast_file: \"{{params
     #[test]
     fn approved_wrapper_shows_approval_line() {
         let w = load_named(
-            "---\nname: demo\ndescription: d\napproved: 2026-11-09T12:00:00-08:00\nsteps:\n  - id: s1\n    run: [\"true\"]\n---\n",
+            "---\nname: demo\ndescription: d\nsteps:\n  - id: s1\n    run: [\"true\"]\n---\n",
             "demo",
         );
-        let plan = resolve(&w, &values(&[])).expect("resolves");
-        assert!(render_plan(&plan).contains("approved 2026-11-09T12:00:00-08:00"));
+        let mut stamped = w.clone();
+        stamped.approved = Some(crate::wrappers::approval::stamp_for(
+            &w,
+            "2026-11-10T08:00:00-08:00",
+        ));
+        let plan = resolve(&stamped, &values(&[])).expect("resolves");
+        let text = render_plan(&plan);
+        assert!(
+            text.contains("approved 2026-11-10T08:00:00-08:00"),
+            "{text}"
+        );
+        assert!(text.contains("content sha256"), "{text}");
     }
 
     #[test]

@@ -217,6 +217,29 @@ fn wrapper_run_matches_flag_path() {
 
 #[test]
 fn approved_wrapper_reports_approval_in_plan() {
+    // Stamp programmatically (C1): the stamp is a content-bound {at, sha256}
+    // mapping, computed over the wrapper's executable sections.
+    let sb = Sandbox::new();
+    let raw = "---\nname: ok\ndescription: d\nsteps:\n  - id: s1\n    run: [\"true\"]\n---\n";
+    sb.wrapper("ok", raw);
+    let def = smah_core::wrappers::loader::load_from(&sb.wrappers.join("ok.md")).expect("loads");
+    let stamp = smah_core::wrappers::approval::stamp_for(&def, "2026-11-10T08:00:00-08:00");
+    let mut stamped = def.clone();
+    stamped.approved = Some(stamp);
+    let content = smah_core::wrappers::prompt::render_wrapper_file(&stamped);
+    std::fs::write(sb.wrappers.join("ok.md"), content).expect("stamped file");
+    sb.smah()
+        .args(["--wrapper", "ok"])
+        .assert()
+        .code(0)
+        .stdout(predicates::str::contains(
+            "approved 2026-11-10T08:00:00-08:00",
+        ))
+        .stdout(predicates::str::contains("content sha256"));
+}
+
+#[test]
+fn legacy_bare_timestamp_is_rejected_as_invalid() {
     let sb = Sandbox::new();
     sb.wrapper(
         "ok",
@@ -225,10 +248,8 @@ fn approved_wrapper_reports_approval_in_plan() {
     sb.smah()
         .args(["--wrapper", "ok"])
         .assert()
-        .code(0)
-        .stdout(predicates::str::contains(
-            "approved 2026-11-09T09:00:00-08:00",
-        ));
+        .code(3)
+        .stderr(predicates::str::contains("REJECTED legacy format"));
 }
 
 #[test]

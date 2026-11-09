@@ -18,9 +18,14 @@
 //!   unknown params are load errors — a recipe that cannot resolve is a
 //!   broken recipe, and it must fail before anything prints an execution
 //!   plan around it;
-//! - `approved:` (optional, RFC 3339) is the explicit user sign-off
-//!   `smah-run --execute` demands (owner decision 2026-11-09): absent, the
-//!   wrapper may be planned and dry-run but never executed.
+//! - `approved:` (optional) is the explicit user sign-off `smah-run
+//!   --execute` demands (owner decision 2026-11-09): a content-bound stamp
+//!   `{at: <rfc3339>, sha256: <hex>}` (`crate::wrappers::approval`). The
+//!   legacy bare-timestamp format is **rejected** — a time alone proves
+//!   nothing about what was reviewed. The loader parses the stamp shape;
+//!   INTEGRITY (hash matches content) is enforced at execution time by
+//!   `smah-run`, never here — an invalidated stamp must still load so
+//!   `smah-run approve` can re-stamp the edited file.
 //!
 //! The loader is registry-agnostic: `use:` names are shape-checked here and
 //! resolved against the built-in registry by [`crate::wrappers::resolve`].
@@ -31,6 +36,7 @@ use std::path::{Path, PathBuf};
 use serde_yaml_ng::Value;
 
 use crate::virtual_tools::{is_valid_name, RESERVED_NAMES};
+use crate::wrappers::approval::ApprovalStamp;
 use crate::wrappers::{Binding, PARAMS_MAX, STEPS_MAX};
 
 /// A parsed, valid wrapper definition.
@@ -45,9 +51,10 @@ pub struct WrapperDef {
     pub model: Option<String>,
     /// Persona injected into the `--prompt` composition prompt.
     pub behavior_prompt: Option<String>,
-    /// RFC 3339 timestamp the user approved this recipe for execution.
-    /// `None` = plan/dry-run only (`smah-run --execute` refuses).
-    pub approved: Option<String>,
+    /// Content-bound approval stamp (C1): `approved: {at, sha256}` where
+    /// the hash binds the executable sections. `None` = plan/dry-run only
+    /// (`smah-run --execute` refuses, exit 4).
+    pub approved: Option<ApprovalStamp>,
     /// Declared invocation params.
     pub params: Vec<WrapperParam>,
     /// Ordered recipe steps.
@@ -71,6 +78,10 @@ pub struct WrapperParam {
     pub required: bool,
     /// Default applied when the param is absent and not required.
     pub default: Option<String>,
+    /// `audit: plain` opt-in (M1): this param's value may appear verbatim
+    /// (post-redactor) in smah-run audit records. Default false — values
+    /// are recorded as name + sha256 prefix only.
+    pub audit_plain: bool,
 }
 
 /// One ordered recipe step. Exactly one of `use_` / `run` is `Some`.
@@ -337,16 +348,37 @@ pub fn parse_wrapper(
         None => None,
     };
 
-    let approved = match get_str("approved") {
-        Some(Ok(a)) => {
-            if chrono::DateTime::parse_from_rfc3339(&a).is_err() {
-                return Err(format!(
-                    "'approved' must be an RFC 3339 timestamp (e.g. 2026-11-09T14:30:00-08:00), got '{a}'"
-                ));
+    let approved = match map.get(Value::String("approved".to_string())) {
+        Some(Value::Mapping(amap)) => {
+            for key in amap.keys() {
+                let key = key.as_str().unwrap_or("<non-string key>");
+                if !["at", "sha256"].contains(&key) {
+                    return Err(format!(
+                        "unknown approved-stamp key '{key}' (expected at, sha256)"
+                    ));
+                }
             }
-            Some(a)
+            let at = string_field(amap, "at")?.ok_or_else(|| {
+                "'approved' mapping missing 'at' (the review timestamp)".to_string()
+            })?;
+            let sha256 = string_field(amap, "sha256")?.ok_or_else(|| {
+                "'approved' mapping missing 'sha256' (the content binding)".to_string()
+            })?;
+            // Shape here is lenient (fields present as strings); RFC 3339
+            // and hex well-formedness are enforced at execution time by
+            // `crate::wrappers::approval::verify` so a malformed stamp still
+            // loads and can be re-approved.
+            Some(ApprovalStamp { at, sha256 })
         }
-        Some(Err(err)) => return Err(err),
+        Some(Value::String(s)) => {
+            return Err(format!(
+                "'approved' as a bare timestamp ('{s}') is the REJECTED legacy format — \
+                 approval now binds a content hash; re-approve with 'smah-run approve <name>'"
+            ))
+        }
+        Some(_) => {
+            return Err("'approved' must be a mapping {at: <rfc3339>, sha256: <hex>}".to_string())
+        }
         None => None,
     };
 
@@ -365,7 +397,7 @@ pub fn parse_wrapper(
                 .ok_or_else(|| "'params' entries must be mappings".to_string())?;
             for key in emap.keys() {
                 let key = key.as_str().unwrap_or("<non-string key>");
-                if !["name", "description", "required", "default"].contains(&key) {
+                if !["name", "description", "required", "default", "audit"].contains(&key) {
                     return Err(format!("unknown param key '{key}'"));
                 }
             }
@@ -396,11 +428,29 @@ pub fn parse_wrapper(
                     "param '{pname}' cannot be both required and carry a default"
                 ));
             }
+            // M1 opt-in: `audit: plain` — the ONLY accepted value. Anything
+            // else rejects (a typo like `audti` is an unknown key; a value
+            // like `hash` is meaningless — hashed is the default).
+            let audit_plain = match emap.get(Value::String("audit".to_string())) {
+                Some(Value::String(v)) if v == "plain" => true,
+                Some(Value::String(v)) => {
+                    return Err(format!(
+                        "param '{pname}': 'audit' must be 'plain' (the only opt-in), got '{v}'"
+                    ))
+                }
+                Some(_) => {
+                    return Err(format!(
+                        "param '{pname}': 'audit' must be the string 'plain'"
+                    ))
+                }
+                None => false,
+            };
             params.push(WrapperParam {
                 name: pname,
                 description,
                 required,
                 default,
+                audit_plain,
             });
         }
     }
@@ -938,19 +988,86 @@ steps:\n  - id: s1\n    run: [\"echo\", \"hi\"]\n\
     }
 
     #[test]
-    fn approved_must_be_rfc3339() {
+    fn legacy_bare_timestamp_approved_rejected() {
         let bad = MINIMAL.replace(
-            "description: a demo",
-            "description: a demo\napproved: yesterday",
-        );
-        let (_d, path) = write_tmp("demo", &bad);
-        assert!(load_from(&path).unwrap_err().contains("RFC 3339"));
-        let good = MINIMAL.replace(
             "description: a demo",
             "description: a demo\napproved: 2026-11-09T14:30:00-08:00",
         );
+        let (_d, path) = write_tmp("demo", &bad);
+        let err = load_from(&path).unwrap_err();
+        assert!(err.contains("REJECTED legacy format"), "{err}");
+        assert!(err.contains("smah-run approve"), "{err}");
+        let nonsense = MINIMAL.replace(
+            "description: a demo",
+            "description: a demo\napproved: yesterday",
+        );
+        let (_d, path) = write_tmp("demo", &nonsense);
+        assert!(load_from(&path)
+            .unwrap_err()
+            .contains("REJECTED legacy format"));
+    }
+
+    #[test]
+    fn content_bound_stamp_parses_leniently() {
+        let good = MINIMAL.replace(
+            "description: a demo",
+            "description: a demo\napproved:\n  at: 2026-11-10T08:00:00-08:00\n  sha256: 0123abcd",
+        );
         let (_d, path) = write_tmp("demo", &good);
+        let def = load_from(&path).expect("loads");
+        let stamp = def.approved.expect("stamp");
+        assert_eq!(stamp.at, "2026-11-10T08:00:00-08:00");
+        assert_eq!(stamp.sha256, "0123abcd");
+        // Shape is lenient at load (integrity is smah-run's job): a
+        // non-RFC3339 `at` still parses — execution refuses it instead.
+        let sloppy = MINIMAL.replace(
+            "description: a demo",
+            "description: a demo\napproved:\n  at: yesterday\n  sha256: zz",
+        );
+        let (_d, path) = write_tmp("demo", &sloppy);
         assert!(load_from(&path).expect("loads").approved.is_some());
+    }
+
+    #[test]
+    fn approved_stamp_unknown_key_and_shape_reject() {
+        let bad = MINIMAL.replace(
+            "description: a demo",
+            "description: a demo\napproved:\n  at: 2026-11-10T08:00:00-08:00\n  sha256: ff\n  by: me",
+        );
+        let (_d, path) = write_tmp("demo", &bad);
+        assert!(load_from(&path)
+            .unwrap_err()
+            .contains("unknown approved-stamp key 'by'"));
+        let scalar = MINIMAL.replace("description: a demo", "description: a demo\napproved: 5");
+        let (_d, path) = write_tmp("demo", &scalar);
+        assert!(load_from(&path)
+            .unwrap_err()
+            .contains("must be a mapping {at: <rfc3339>, sha256: <hex>}"));
+        let missing_sha = MINIMAL.replace(
+            "description: a demo",
+            "description: a demo\napproved:\n  at: 2026-11-10T08:00:00-08:00",
+        );
+        let (_d, path) = write_tmp("demo", &missing_sha);
+        assert!(load_from(&path).unwrap_err().contains("missing 'sha256'"));
+    }
+
+    #[test]
+    fn audit_plain_param_opt_in() {
+        let good = MINIMAL.replace(
+            "description: a demo",
+            "description: a demo\nparams:\n  - name: label\n    default: x\n    audit: plain",
+        );
+        let (_d, path) = write_tmp("demo", &good);
+        let def = load_from(&path).expect("loads");
+        assert!(def.params[0].audit_plain);
+        let bad = MINIMAL.replace(
+            "description: a demo",
+            "description: a demo\nparams:\n  - name: label\n    default: x\n    audit: hashed",
+        );
+        let (_d, path) = write_tmp("demo", &bad);
+        assert!(load_from(&path)
+            .unwrap_err()
+            .contains("'audit' must be 'plain'"));
     }
 
     #[test]

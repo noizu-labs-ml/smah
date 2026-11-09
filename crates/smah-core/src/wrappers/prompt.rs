@@ -5,8 +5,9 @@
 //! patches are brittle for structural edits) which is validated, applied,
 //! re-validated through the full loader, shown to the user as a readable
 //! diff, and only then saved — with a provenance stamp (owner decision:
-//! every inference-sourced change is traceable) and an `approved:` stamp
-//! (accepting the diff *is* the review that unlocks `smah-run --execute`).
+//! every inference-sourced change is traceable). Approval is NOT part of
+//! this flow: accepting a diff is a recipe review, never an execution
+//! sign-off (C1 — see `crate::wrappers::approval`).
 //!
 //! Caching (owner decision): keyed by `(wrapper_sha256, prompt_sha256)` —
 //! a repeat prompt against an unchanged wrapper skips inference entirely.
@@ -188,6 +189,12 @@ pub fn apply_changes(
 ) -> Result<(WrapperDef, String), String> {
     let mut next = wrapper.clone();
 
+    // Approval never survives a composition turn (C1): model output cannot
+    // carry or create an `approved:` stamp — the composed recipe is
+    // unapproved until the user explicitly stamps it with
+    // `smah-run approve <wrapper>`.
+    next.approved = None;
+
     // Params first (step bindings referencing new params must validate).
     for name in &changes.actions.remove_params {
         if !next.params.iter().any(|p| &p.name == name) {
@@ -205,6 +212,9 @@ pub fn apply_changes(
             description: spec.description.clone(),
             required: spec.required.unwrap_or(false),
             default: spec.default.clone(),
+            // Model-proposed params can NEVER opt into verbatim audit
+            // (M1): `audit: plain` is a human-authored-file decision only.
+            audit_plain: false,
         });
     }
 
@@ -336,61 +346,22 @@ pub fn render_frontmatter(wrapper: &WrapperDef) -> String {
         );
     }
     if let Some(a) = &wrapper.approved {
-        map.insert(Value::String("approved".into()), Value::String(a.clone()));
-    }
-    if !wrapper.params.is_empty() {
-        map.insert(
-            Value::String("params".into()),
-            Value::Sequence(
-                wrapper
-                    .params
-                    .iter()
-                    .map(|p| {
-                        let mut m = serde_yaml_ng::Mapping::new();
-                        m.insert(Value::String("name".into()), Value::String(p.name.clone()));
-                        if let Some(d) = &p.description {
-                            m.insert(
-                                Value::String("description".into()),
-                                Value::String(d.clone()),
-                            );
-                        }
-                        if p.required {
-                            m.insert(Value::String("required".into()), Value::Bool(true));
-                        }
-                        if let Some(d) = &p.default {
-                            m.insert(Value::String("default".into()), Value::String(d.clone()));
-                        }
-                        Value::Mapping(m)
-                    })
-                    .collect(),
-            ),
+        // Content-bound stamp (C1): `{at, sha256}` mapping — the hash binds
+        // the executable sections (params/steps/outputs), not just a time.
+        let mut amap = serde_yaml_ng::Mapping::new();
+        amap.insert(Value::String("at".into()), Value::String(a.at.clone()));
+        amap.insert(
+            Value::String("sha256".into()),
+            Value::String(a.sha256.clone()),
         );
+        map.insert(Value::String("approved".into()), Value::Mapping(amap));
     }
-    map.insert(
-        Value::String("steps".into()),
-        Value::Sequence(wrapper.steps.iter().map(step_value).collect()),
-    );
-    if !wrapper.outputs.is_empty() {
-        map.insert(
-            Value::String("outputs".into()),
-            Value::Sequence(
-                wrapper
-                    .outputs
-                    .iter()
-                    .map(|o| {
-                        let mut m = serde_yaml_ng::Mapping::new();
-                        m.insert(Value::String("name".into()), Value::String(o.name.clone()));
-                        if let Some(d) = &o.description {
-                            m.insert(
-                                Value::String("description".into()),
-                                Value::String(d.clone()),
-                            );
-                        }
-                        Value::Mapping(m)
-                    })
-                    .collect(),
-            ),
-        );
+    if let Some(p) = params_value(&wrapper.params) {
+        map.insert(Value::String("params".into()), p);
+    }
+    map.insert(Value::String("steps".into()), steps_value(&wrapper.steps));
+    if let Some(o) = outputs_value(&wrapper.outputs) {
+        map.insert(Value::String("outputs".into()), o);
     }
     if !wrapper.preconditions.is_empty() {
         map.insert(
@@ -405,6 +376,68 @@ pub fn render_frontmatter(wrapper: &WrapperDef) -> String {
         );
     }
     serde_yaml_ng::to_string(&Value::Mapping(map)).unwrap_or_default()
+}
+
+/// Canonical `steps:` section value (the shared renderer used by both the
+/// file writer and the approval canonicalizer — one byte form, one hash).
+pub(crate) fn steps_value(steps: &[WrapperStep]) -> Value {
+    Value::Sequence(steps.iter().map(step_value).collect())
+}
+
+/// Canonical `params:` section value; `None` when no params are declared.
+/// The per-param `audit: plain` opt-in is part of the canonical form.
+pub(crate) fn params_value(params: &[WrapperParam]) -> Option<Value> {
+    if params.is_empty() {
+        return None;
+    }
+    Some(Value::Sequence(
+        params
+            .iter()
+            .map(|p| {
+                let mut m = serde_yaml_ng::Mapping::new();
+                m.insert(Value::String("name".into()), Value::String(p.name.clone()));
+                if let Some(d) = &p.description {
+                    m.insert(
+                        Value::String("description".into()),
+                        Value::String(d.clone()),
+                    );
+                }
+                if p.required {
+                    m.insert(Value::String("required".into()), Value::Bool(true));
+                }
+                if let Some(d) = &p.default {
+                    m.insert(Value::String("default".into()), Value::String(d.clone()));
+                }
+                if p.audit_plain {
+                    m.insert(Value::String("audit".into()), Value::String("plain".into()));
+                }
+                Value::Mapping(m)
+            })
+            .collect(),
+    ))
+}
+
+/// Canonical `outputs:` section value; `None` when no outputs are declared.
+pub(crate) fn outputs_value(outputs: &[crate::wrappers::loader::WrapperOutput]) -> Option<Value> {
+    if outputs.is_empty() {
+        return None;
+    }
+    Some(Value::Sequence(
+        outputs
+            .iter()
+            .map(|o| {
+                let mut m = serde_yaml_ng::Mapping::new();
+                m.insert(Value::String("name".into()), Value::String(o.name.clone()));
+                if let Some(d) = &o.description {
+                    m.insert(
+                        Value::String("description".into()),
+                        Value::String(d.clone()),
+                    );
+                }
+                Value::Mapping(m)
+            })
+            .collect(),
+    ))
 }
 
 fn step_value(step: &WrapperStep) -> Value {
@@ -734,6 +767,24 @@ steps:\n  - id: first\n    run: [\"echo\", \"{{params.src}}\"]\n    output: text
         // Content re-parses identically through the loader.
         let again = parse_wrapper(&content, "demo", &HashSet::new()).expect("reparses");
         assert_eq!(again, next);
+    }
+
+    #[test]
+    fn apply_changes_strips_approval_never_carries_or_adds() {
+        // C1: an approved wrapper composed through --prompt yields an
+        // UNAPPROVED recipe — the composed file carries no stamp even when
+        // the source was approved (and model output cannot add one: the
+        // changes object has no approval channel).
+        let mut def = loaded();
+        let stamp = crate::wrappers::approval::stamp_for(&def, "2026-11-10T08:00:00-08:00");
+        def.approved = Some(stamp);
+        let noop = changes(r#"{"explanation":"no-op","changes":{}}"#);
+        let (next, content) = apply_changes(&def, &noop, &HashSet::new()).expect("applies");
+        assert!(next.approved.is_none(), "approval must be stripped");
+        assert!(
+            !content.contains("approved:"),
+            "composed file must not carry a stamp: {content}"
+        );
     }
 
     #[test]

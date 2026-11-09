@@ -151,7 +151,7 @@ async fn prompt_prints_diff_and_writes_nothing_on_a_pipe() {
 }
 
 #[tokio::test]
-async fn accept_applies_with_provenance_and_approval() {
+async fn accept_applies_with_provenance_but_never_approval() {
     let sb = Sandbox::new();
     sb.wrapper("demo", DEMO);
     let server = MockServer::start().await;
@@ -174,12 +174,16 @@ async fn accept_applies_with_provenance_and_approval() {
     let (code, stdout, stderr) = run(output);
 
     assert_eq!(code, 0, "stderr: {stderr}");
-    assert!(stdout.contains("applied + approved"), "stdout: {stdout}");
+    assert!(stdout.contains("NOT approved"), "stdout: {stdout}");
+    assert!(
+        stdout.contains("smah-run approve"),
+        "the remedy is named: {stdout}"
+    );
     let file = sb.read_wrapper("demo");
     assert!(file.contains("id: second"), "applied: {file}");
     assert!(
-        file.contains("approved:"),
-        "acceptance is the review: {file}"
+        !file.contains("approved:"),
+        "accepting a diff must NEVER carry or add approval (C1): {file}"
     );
     assert!(file.contains("# provenance:"), "provenance stamped: {file}");
     assert!(file.contains("prompt_sha256="));
@@ -189,7 +193,8 @@ async fn accept_applies_with_provenance_and_approval() {
         first_request_model(&server).await,
         serde_json::json!("wrap-model")
     );
-    // The approved file still plans cleanly through the deterministic path.
+    // The composed file still plans cleanly through the deterministic
+    // path — and honestly reports it is not approved.
     let plan = sb
         .smah(&server, &["--wrapper", "demo"])
         .write_stdin("")
@@ -197,10 +202,7 @@ async fn accept_applies_with_provenance_and_approval() {
         .expect("plan smah");
     let (pcode, pout, perr) = run(plan);
     assert_eq!(pcode, 0, "stderr: {perr}");
-    assert!(
-        pout.contains("approved 2"),
-        "plan shows the approval: {pout}"
-    );
+    assert!(pout.contains("NOT approved"), "plan shows it: {pout}");
 }
 
 #[tokio::test]

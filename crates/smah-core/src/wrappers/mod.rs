@@ -11,6 +11,8 @@
 //!
 //! Modules:
 //! - [`loader`]: parse/validate/discover `~/.config/smah/wrappers/*.md`
+//! - [`approval`]: content-bound approval stamps (`{at, sha256}`) + the
+//!   execution-time integrity gate (C1)
 //! - [`cast`]: asciinema v2 `.cast` parsing + ANSI stripping (pure Rust)
 //! - [`builtin`]: the compiled-in tool registry (`cast-to-text`)
 //! - [`resolve`]: the `{{params.x}}` / `{{steps.y.output}}` binding engine
@@ -22,6 +24,7 @@
 //! member allowed to spawn processes); `smah` itself never invokes it — it
 //! only prints the exact invocation (owner decision 2026-11-09).
 
+pub mod approval;
 pub mod builtin;
 pub mod cast;
 pub mod loader;
