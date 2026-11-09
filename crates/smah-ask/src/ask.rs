@@ -38,6 +38,25 @@ pub struct TurnOutcome {
     pub prose: String,
     /// Suggestions with their local classifications, in order.
     pub suggestions: Vec<(Suggestion, Classification)>,
+    /// The full raw model text (tags included) — session persistence keeps
+    /// the thread byte-faithful for later turns.
+    pub raw: String,
+}
+
+/// Rebuild a [`TurnOutcome`] from full model text (used when resuming a
+/// session and re-deriving the last turn's blocks).
+pub fn outcome_from_text(text: &str) -> TurnOutcome {
+    let parsed = parse_response(text);
+    let suggestions = parsed
+        .suggestions
+        .iter()
+        .map(|s| (s.clone(), classify(&s.command)))
+        .collect();
+    TurnOutcome {
+        prose: parsed.prose,
+        suggestions,
+        raw: text.to_string(),
+    }
 }
 
 impl TurnOutcome {
@@ -109,18 +128,7 @@ impl<'a> AskFlow<'a> {
             io.out("\n\n");
         }
 
-        // The batch parse of the full text is authoritative for the
-        // structured outcome (the streamed prose may differ in whitespace).
-        let parsed = parse_response(&full);
-        let suggestions = parsed
-            .suggestions
-            .iter()
-            .map(|s| (s.clone(), classify(&s.command)))
-            .collect();
-        Ok(TurnOutcome {
-            prose: parsed.prose,
-            suggestions,
-        })
+        Ok(outcome_from_text(&full))
     }
 }
 

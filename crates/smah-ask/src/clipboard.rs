@@ -118,6 +118,7 @@ mod tests {
                 .iter()
                 .map(|s: &Suggestion| (s.clone(), classify(&s.command)))
                 .collect(),
+            raw: answer.to_string(),
         }
     }
 

@@ -34,7 +34,7 @@ pub fn run_ask(cli: &Cli, ask: &AskArgs) -> i32 {
     }
 }
 
-fn init_logfile() -> PathBuf {
+pub(crate) fn init_logfile() -> PathBuf {
     smah_core::logging::init().unwrap_or_else(|_| PathBuf::from("smah.log"))
 }
 
@@ -107,9 +107,7 @@ fn run_ask_inner(cli: &Cli, ask: &AskArgs) -> Result<i32, SmahError> {
         toggles: EgressToggles::from_settings(&settings),
         instructions,
     };
-    let mut io = ConsoleIo {
-        out_tty: std::io::stdout().is_terminal(),
-    };
+    let mut io = ConsoleIo::new();
     if ask.json {
         // Machine mode (§5): no streaming prose, no block rendering — one
         // JSON object on stdout (still content-only; diagnostics stderr).
@@ -134,13 +132,96 @@ fn run_ask_inner(cli: &Cli, ask: &AskArgs) -> Result<i32, SmahError> {
     let config_auto = smah_ask::config_auto(&settings);
     let decision = smah_ask::CopyDecision::resolve(ask.copy, ask.no_copy, config_auto);
     eprintln!("{}", smah_ask::apply_copy(decision, &outcome).stderr_line());
+
+    // On a real terminal the one-shot answer continues into the chat loop
+    // (RA-03): the exchange is persisted and the standing keys take over.
+    // Piped/JSON runs stay one-shot (§5). Session-store trouble after a
+    // delivered answer is a stderr notice, not a failed ask.
+    if !ask.json && std::io::stdin().is_terminal() && io.out_is_tty() {
+        if let Err(err) = continue_into_loop(
+            &flow,
+            &settings,
+            &query,
+            piped.as_deref(),
+            truncation,
+            &outcome,
+        ) {
+            eprintln!("smah: interactive follow-up unavailable: {err}");
+        }
+    }
     Ok(0)
+}
+
+/// Persist the delivered exchange and hand control to the chat loop.
+fn continue_into_loop(
+    flow: &AskFlow<'_>,
+    settings: &Settings,
+    query: &str,
+    piped: Option<&str>,
+    truncation: Option<(usize, usize)>,
+    outcome: &smah_ask::TurnOutcome,
+) -> Result<(), SmahError> {
+    let store = smah_ask::SessionStore::open(&crate::chat_cmd::session_db_path(settings))?;
+    let session = store.create_session(&crate::chat_cmd::session_title(query))?;
+    store.set_last_session(session)?;
+    let user_text = smah_ask::query_turn(query, piped, truncation);
+    store.append_message(session, &ThreadMessage::user(&user_text))?;
+    store.append_message(session, &ThreadMessage::assistant(&outcome.raw))?;
+    let mut history = vec![
+        ThreadMessage::user(user_text),
+        ThreadMessage::assistant(outcome.raw.clone()),
+    ];
+    let edit_dir = smah_core::virtual_tools::audit::cache_dir();
+    let mut io = crate::chat_cmd::ConsoleLoopIo::new();
+    let loop_ = smah_ask::ChatLoop {
+        flow,
+        store: &store,
+        session,
+        edit_dir: &edit_dir,
+    };
+    loop_.key_loop(&mut io, &mut history, outcome.clone())
+}
+
+/// Settings + provider + model + the key preflight (shared by ask/chat/
+/// resume — same precedence as the emulate path). Fails fast with exit 4
+/// on a keyless provider, before any network call.
+pub(crate) fn build_backend(
+    cli: &Cli,
+    settings: &Settings,
+) -> Result<ProviderAskBackend, SmahError> {
+    let model_spec = cli
+        .model
+        .clone()
+        .unwrap_or_else(|| DEFAULT_MODEL_ID.to_string());
+    let (provider_key, model_id) = split_model_spec(&model_spec, DEFAULT_PROVIDER);
+    let provider = smah_providers::registry::get_provider(&provider_key, settings, None)?;
+    let has_creds = provider.has_credentials();
+    let backend = ProviderAskBackend {
+        inner: ProviderBackend::new(provider),
+        model_id,
+        provider_key,
+        has_creds,
+    };
+    if !backend.has_credentials() {
+        return Err(SmahError::MissingApiKey {
+            provider: backend.provider_key().to_string(),
+        });
+    }
+    Ok(backend)
 }
 
 /// Real console: content on stdout (flushed per write so streamed prose is
 /// live), diagnostics on stderr.
-struct ConsoleIo {
+pub(crate) struct ConsoleIo {
     out_tty: bool,
+}
+
+impl ConsoleIo {
+    pub(crate) fn new() -> Self {
+        ConsoleIo {
+            out_tty: std::io::stdout().is_terminal(),
+        }
+    }
 }
 
 impl AskIo for ConsoleIo {
@@ -170,7 +251,7 @@ impl AskIo for ConsoleIo {
 
 /// [`AskBackend`] over the providers layer (the sole ask-path file that
 /// knows the provider types; mirrors backend.rs).
-struct ProviderAskBackend {
+pub(crate) struct ProviderAskBackend {
     inner: ProviderBackend,
     model_id: String,
     provider_key: String,
