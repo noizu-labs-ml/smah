@@ -9,6 +9,7 @@ pub mod exit_codes;
 pub mod logging;
 pub mod settings;
 pub mod virtual_tools;
+pub mod wrappers;
 
 pub use errors::SmahError;
 pub use exit_codes::ExitCode;
