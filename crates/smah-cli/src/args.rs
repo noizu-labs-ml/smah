@@ -139,6 +139,15 @@ pub struct AskArgs {
     /// exit codes are unchanged.
     #[arg(long)]
     pub json: bool,
+
+    /// Force a clipboard copy attempt even if config disabled it
+    /// (single-command answers only).
+    #[arg(long)]
+    pub copy: bool,
+
+    /// Never touch the clipboard this run.
+    #[arg(long)]
+    pub no_copy: bool,
 }
 
 /// `smah tools ...`

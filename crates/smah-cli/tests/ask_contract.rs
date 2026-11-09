@@ -407,3 +407,75 @@ async fn json_mode_error_paths_keep_exit_codes() {
     assert_eq!(code, 2);
     assert!(stdout.is_empty());
 }
+
+// ---------------------------------------------------------------------------
+// RA-05 — clipboard handoff
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn single_command_answer_reports_copy_outcome() {
+    let sandbox = Sandbox::new();
+    let server = MockServer::start().await;
+    mount_answer(&server, GOOD_ANSWER).await;
+
+    let output = sandbox
+        .ask(&server, &[], &["free disk"])
+        .write_stdin("")
+        .output()
+        .expect("run smah");
+    let (code, stdout, stderr) = run(output);
+
+    // Copy success depends on the host (headless CI has no pasteboard);
+    // both outcomes are stderr chrome and never change the exit code or
+    // stdout content.
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("journalctl --vacuum-time=7d"));
+    assert!(
+        stderr.contains("copied to clipboard: journalctl --vacuum-time=7d")
+            || stderr.contains("clipboard unavailable")
+            || stderr.contains("clipboard write failed"),
+        "copy outcome reported on stderr: {stderr}"
+    );
+}
+
+#[tokio::test]
+async fn no_copy_flag_skips_the_clipboard_entirely() {
+    let sandbox = Sandbox::new();
+    let server = MockServer::start().await;
+    mount_answer(&server, GOOD_ANSWER).await;
+
+    let output = sandbox
+        .ask(&server, &[], &["--no-copy", "free disk"])
+        .write_stdin("")
+        .output()
+        .expect("run smah");
+    let (code, _, stderr) = run(output);
+
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stderr.contains("clipboard: disabled for this run (--no-copy)"),
+        "stderr: {stderr}"
+    );
+}
+
+#[tokio::test]
+async fn multi_command_answer_is_not_bulk_copied() {
+    let sandbox = Sandbox::new();
+    let server = MockServer::start().await;
+    let answer = "two steps:\n<exec><command>df -h</command></exec>\nthen:\n<exec><command>du -sh .</command></exec>";
+    mount_answer(&server, answer).await;
+
+    let output = sandbox
+        .ask(&server, &[], &["--copy", "disk usage"])
+        .write_stdin("")
+        .output()
+        .expect("run smah");
+    let (code, stdout, stderr) = run(output);
+
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("## Suggested command 2 of 2"));
+    assert!(
+        stderr.contains("multiple commands"),
+        "no bulk copy of several commands: {stderr}"
+    );
+}
