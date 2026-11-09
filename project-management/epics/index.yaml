@@ -1,0 +1,65 @@
+# Epic Index — generated from epic + story frontmatter; regenerate on change.
+version: 1
+updated: 2026-10-18
+
+epics:
+  - id: EPIC-01
+    title: "Command Generation and Output Panel"
+    slug: command-generation-and-output-panel
+    personas: [P-001, P-002, P-003, P-006]
+    story_count: 10
+    file: EPIC-01-command-generation-and-output-panel.md
+  - id: EPIC-02
+    title: "Stdin Piping and Summaries"
+    slug: stdin-piping-and-summaries
+    personas: [P-004, P-005]
+    story_count: 6
+    file: EPIC-02-stdin-piping-and-summaries.md
+  - id: EPIC-03
+    title: "Providers and API Keys"
+    slug: providers-and-api-keys
+    personas: [P-001, P-003, P-005, P-007]
+    story_count: 9
+    file: EPIC-03-providers-and-api-keys.md
+  - id: EPIC-04
+    title: "Sessions and History"
+    slug: sessions-and-history
+    personas: [P-001, P-002, P-005]
+    story_count: 6
+    file: EPIC-04-sessions-and-history.md
+  - id: EPIC-05
+    title: "Config Management"
+    slug: config-management
+    personas: [P-001, P-002, P-005, P-006]
+    story_count: 5
+    file: EPIC-05-config-management.md
+  - id: EPIC-06
+    title: "Doctor and Diagnostics"
+    slug: doctor-and-diagnostics
+    personas: [P-001, P-003, P-005, P-006]
+    story_count: 5
+    file: EPIC-06-doctor-and-diagnostics.md
+  - id: EPIC-07
+    title: "Legacy Flag Back-Compat"
+    slug: legacy-flag-back-compat
+    personas: [P-002, P-003, P-005, P-007]
+    story_count: 7
+    file: EPIC-07-legacy-flag-back-compat.md
+  - id: EPIC-08
+    title: "Safety and Print-Only Guarantees"
+    slug: safety-and-print-only
+    personas: [P-001, P-002, P-006]
+    story_count: 7
+    file: EPIC-08-safety-and-print-only.md
+  - id: EPIC-09
+    title: "Scripting and Exit-Code Contract"
+    slug: scripting-and-exit-codes
+    personas: [P-003, P-005]
+    story_count: 7
+    file: EPIC-09-scripting-and-exit-codes.md
+  - id: EPIC-10
+    title: "First Run and Onboarding"
+    slug: first-run-and-onboarding
+    personas: [P-001, P-003, P-006, P-007]
+    story_count: 8
+    file: EPIC-10-first-run-and-onboarding.md

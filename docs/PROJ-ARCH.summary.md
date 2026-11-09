@@ -27,8 +27,15 @@ Secrets: flag → config (`$ENV_VAR` indirection) → env; never printed, never 
 **Storage:** SQLite `~/.smah/smah.db` — sessions only, auto-migrates at startup;
 `smah-db` = manual migration CLI (checksummed, single migration today).
 
+**Rust rewrite (scaffold, M0):** `crates/*` — `smah-core` (UI-agnostic domain)
+← `smah-providers` (hand-rolled rustls clients, SSE) / `smah-tui` (ratatui)
+← `smah-cli` (clap). Parity goals: MD5 migration checksums, Python-format
+YAML, print-only invariant (`sysinfo` instead of subprocess; `ci-rs.yml`
+no-shell gate). Runs alongside the Python CLI until cutover.
+
 **Stack:** Python ≥3.10 · Poetry · rich · anthropic+openai SDKs · pyyaml ·
-psutil · lxml · pytest · Sphinx/RTD · GH Actions (pytest; PyPI trusted publishing).
+psutil · lxml · pytest · Sphinx/RTD · GH Actions (pytest; PyPI trusted publishing)
+· Rust workspace scaffold (tokio/clap/ratatui/reqwest-rustls/rusqlite/sysinfo).
 
 **Known gaps:** `docs/source/architecture.md` is a stale aspirational draft
 (execution/RBAC/TimescaleDB never existed — superseded); `doctor.__check_provider`

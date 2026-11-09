@@ -1,10 +1,28 @@
 CHANGE LOG
 ==============
 
+## 2026-11-09
+- retire PyPI release lane: .github/workflows/release.yml deleted (PyPI Trusted Publishing on v* tags) — Python package on PyPI frozen at 0.2.0, deprecated, NOT yanked; README deprecation note, Installation now leads with `cargo install --git https://github.com/noizu-labs-ml/smah smah-cli` (Rust toolchain, MSRV 1.82); PROJ-LAYOUT + THREAT-MODEL T-007 mentions synced (#37).
+- docs(plans): add mallm fold-in plan — phased Rust port of mallm into a `smah-docs` crate + `smah docs` subcommand, with the help-capture exec question flagged as an owner decision (`docs/plans/mallm-fold.md`)
+- epic: Rust port (rust-tui) → develop — origin/develop merged into epic.rust-tui (doc-pointer headers kept both sides); full Rust CLI verified locally: cargo build clean, 332 tests green (8 ignored), clippy -D warnings + fmt clean, Rust+Python no-shell gates green, Python pytest 200 green; cargo install → bins smah, smah_db (#36). Merges REGULAR, not squash.
+- docs(plans): mallm fold-in owner decisions recorded (2026-11-09) — exec = Option C (corpus-only + piped help; HelpCapture seam kept; any exec reader needs a further owner call); project-local tier keeps .mallm/; how-to pipeline re-homes later as a separate non-SMAH product (not dropped); jev quiz/learn + memory/knowledge.yaml port in P2 via smah-providers/hosted Jev, no exec; history→smah.db SQLite, jsonschema validation, parity-matrix retirement carried as assumptions pending owner (docs/plans/mallm-fold.md §8)
+
+## 2026-10-28
+- docs: add AGENT-README.md (agent orientation)
 
 ## Changes
 
 ### Unreleased
+October 27 2026
+
+- Doc sweep: `docs/PROJ-LAYOUT.md` (+ summary) and `docs/PROJ-ARCH.md`
+  (+ summary) now cover the Rust workspace scaffold (`crates/*`,
+  `ci-rs.yml`, `rust-toolchain.toml`) alongside the Python CLI; added
+  `docs/PROJ-SCHEMA.md` (+ `.summary.md`) documenting the SQLite session
+  store, checksummed migration runner, and non-relational config/contract
+  schemas; THREAT-MODEL T-007 updated (Rust CI actions SHA-pinned, Python
+  `ci.yml`/`release.yml` still tag-pinned).
+
 October 18 2026
 
 - docs: virtual-tools family index refreshed — all nine drivers shipped, per-driver contract links; THREAT-MODEL.summary.md synced for T-026…T-030 (register now 30 items: 18 mitigated · 6 partial · 3 open · 3 accepted).
