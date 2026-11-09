@@ -1,0 +1,47 @@
+# Persona Index — generated from persona frontmatter; regenerate on change.
+version: 1
+updated: 2026-10-18
+
+personas:
+  - id: P-001
+    name: "Priya Raman"
+    slug: priya-platform-engineer
+    archetype: "Platform engineer under strict change control"
+    segment: "primary"
+    file: P-001-priya-platform-engineer.md
+  - id: P-002
+    name: "Marcus Webb"
+    slug: marcus-solo-sysadmin
+    archetype: "Solo sysadmin, the whole IT department"
+    segment: "primary"
+    file: P-002-marcus-solo-sysadmin.md
+  - id: P-003
+    name: "Dana Osei"
+    slug: dana-dev-into-ops
+    archetype: "Developer drifting into operations"
+    segment: "primary"
+    file: P-003-dana-dev-into-ops.md
+  - id: P-004
+    name: "Ines Duarte"
+    slug: ines-data-log-engineer
+    archetype: "Data engineer and log wrangler"
+    segment: "secondary"
+    file: P-004-ines-data-log-engineer.md
+  - id: P-005
+    name: "Sam Okafor"
+    slug: sam-automation-engineer
+    archetype: "CI and scripting automation user"
+    segment: "secondary"
+    file: P-005-sam-automation-engineer.md
+  - id: P-006
+    name: "Yuki Tanaka"
+    slug: yuki-screen-reader-user
+    archetype: "Blind engineer using a screen reader"
+    segment: "edge-case"
+    file: P-006-yuki-screen-reader-user.md
+  - id: P-007
+    name: "Ren Volkov"
+    slug: ren-restricted-network-operator
+    archetype: "Operator behind restricted and unreliable networks"
+    segment: "edge-case"
+    file: P-007-ren-restricted-network-operator.md

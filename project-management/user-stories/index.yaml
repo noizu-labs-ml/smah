@@ -1,0 +1,495 @@
+# User Story Index — generated from story frontmatter; regenerate on change.
+version: 1
+updated: 2026-10-18
+
+user_stories:
+  - id: US-001
+    title: "One-shot query via smah ask"
+    slug: one-shot-query-via-smah-ask
+    epic: "Command Generation and Output Panel"
+    priority: must-have
+    personas: [P-002, P-003]
+    file: US-001-one-shot-query-via-smah-ask.md
+  - id: US-002
+    title: "Two-stage planning pipeline answers every query"
+    slug: two-stage-planning-pipeline
+    epic: "Command Generation and Output Panel"
+    priority: must-have
+    personas: [P-001, P-003]
+    file: US-002-two-stage-planning-pipeline.md
+  - id: US-003
+    title: "Suggested-command panel with title, purpose, and no execution"
+    slug: suggested-command-panel
+    epic: "Command Generation and Output Panel"
+    priority: must-have
+    personas: [P-001, P-002]
+    file: US-003-suggested-command-panel.md
+  - id: US-004
+    title: "Per-run model overrides for query, pipe, and answering stages"
+    slug: per-run-model-overrides
+    epic: "Command Generation and Output Panel"
+    priority: should-have
+    personas: [P-001]
+    file: US-004-per-run-model-overrides.md
+  - id: US-005
+    title: "Instruction file becomes the query"
+    slug: instruction-file-becomes-query
+    epic: "Command Generation and Output Panel"
+    priority: must-have
+    personas: [P-003]
+    file: US-005-instruction-file-becomes-query.md
+  - id: US-006
+    title: "ask without a query exits 2 with guidance"
+    slug: ask-without-query-exits-2
+    epic: "Command Generation and Output Panel"
+    priority: must-have
+    personas: [P-005]
+    file: US-006-ask-without-query-exits-2.md
+  - id: US-007
+    title: "Verbose stderr ladder for plans and payloads"
+    slug: verbose-stderr-ladder
+    epic: "Command Generation and Output Panel"
+    priority: could-have
+    personas: [P-004]
+    file: US-007-verbose-stderr-ladder.md
+  - id: US-008
+    title: "Rich vs plain output follows TTY with explicit overrides"
+    slug: rich-vs-plain-tty-aware-output
+    epic: "Command Generation and Output Panel"
+    priority: must-have
+    personas: [P-004, P-006]
+    file: US-008-rich-vs-plain-tty-aware-output.md
+  - id: US-009
+    title: "Best-effort clipboard copy with silent degrade"
+    slug: best-effort-clipboard-copy
+    epic: "Command Generation and Output Panel"
+    priority: should-have
+    personas: [P-002]
+    file: US-009-best-effort-clipboard-copy.md
+  - id: US-010
+    title: "Graphical interface"
+    slug: graphical-interface
+    epic: "Command Generation and Output Panel"
+    priority: wont-have
+    personas: [P-002]
+    file: US-010-graphical-interface.md
+  - id: US-011
+    title: "Pipe stdin with an instruction yields a summary on stdout"
+    slug: pipe-stdin-instruction-summary
+    epic: "Stdin Piping and Summaries"
+    priority: must-have
+    personas: [P-004]
+    file: US-011-pipe-stdin-instruction-summary.md
+  - id: US-012
+    title: "Answer-only stdout, chrome on stderr"
+    slug: answer-only-stdout
+    epic: "Stdin Piping and Summaries"
+    priority: must-have
+    personas: [P-004, P-005]
+    file: US-012-answer-only-stdout.md
+  - id: US-013
+    title: "Oversized piped input follows the head-elision-tail contract"
+    slug: oversized-pipe-head-elision-tail
+    epic: "Stdin Piping and Summaries"
+    priority: should-have
+    personas: [P-004]
+    file: US-013-oversized-pipe-head-elision-tail.md
+  - id: US-014
+    title: "Truncation is visible to the user and the model"
+    slug: truncation-visible
+    epic: "Stdin Piping and Summaries"
+    priority: must-have
+    personas: [P-004]
+    file: US-014-truncation-visible.md
+  - id: US-015
+    title: "Pipe without an instruction exits 2"
+    slug: pipe-without-instruction-exits-2
+    epic: "Stdin Piping and Summaries"
+    priority: must-have
+    personas: [P-004, P-005]
+    file: US-015-pipe-without-instruction-exits-2.md
+  - id: US-016
+    title: "Piped input persists with the session for re-query"
+    slug: piped-input-persists-in-session
+    epic: "Stdin Piping and Summaries"
+    priority: could-have
+    personas: [P-004]
+    file: US-016-piped-input-persists-in-session.md
+  - id: US-017
+    title: "Claude works out of the box as default provider"
+    slug: claude-default-out-of-the-box
+    epic: "Providers and API Keys"
+    priority: must-have
+    personas: [P-003]
+    file: US-017-claude-default-out-of-the-box.md
+  - id: US-018
+    title: "OpenAI retained as an alternate backend"
+    slug: openai-alternate-backend
+    epic: "Providers and API Keys"
+    priority: must-have
+    personas: [P-001]
+    file: US-018-openai-alternate-backend.md
+  - id: US-019
+    title: "Layered API key resolution order"
+    slug: layered-api-key-resolution
+    epic: "Providers and API Keys"
+    priority: must-have
+    personas: [P-007]
+    file: US-019-layered-api-key-resolution.md
+  - id: US-020
+    title: "Missing key preflight fails with exit 4 before any network call"
+    slug: missing-key-preflight-exit-4
+    epic: "Providers and API Keys"
+    priority: must-have
+    personas: [P-003, P-005]
+    file: US-020-missing-key-preflight-exit-4.md
+  - id: US-021
+    title: "Provider auth failure maps to exit 4 and names the provider"
+    slug: provider-auth-failure-exit-4
+    epic: "Providers and API Keys"
+    priority: must-have
+    personas: [P-005]
+    file: US-021-provider-auth-failure-exit-4.md
+  - id: US-022
+    title: "Provider and network failures map to exit 5"
+    slug: provider-network-failures-exit-5
+    epic: "Providers and API Keys"
+    priority: must-have
+    personas: [P-005, P-007]
+    file: US-022-provider-network-failures-exit-5.md
+  - id: US-023
+    title: "Unknown or malformed provider block exits 3"
+    slug: malformed-provider-block-exit-3
+    epic: "Providers and API Keys"
+    priority: should-have
+    personas: [P-005]
+    file: US-023-malformed-provider-block-exit-3.md
+  - id: US-024
+    title: "Planner answering in prose instead of JSON exits 5"
+    slug: planner-prose-exits-5
+    epic: "Providers and API Keys"
+    priority: must-have
+    personas: [P-005]
+    file: US-024-planner-prose-exits-5.md
+  - id: US-025
+    title: "Streaming responses"
+    slug: streaming-responses
+    epic: "Providers and API Keys"
+    priority: wont-have
+    personas: [P-004]
+    file: US-025-streaming-responses.md
+  - id: US-026
+    title: "history lists sessions with --limit"
+    slug: history-lists-sessions
+    epic: "Sessions and History"
+    priority: must-have
+    personas: [P-002]
+    file: US-026-history-lists-sessions.md
+  - id: US-027
+    title: "history with a missing database is not an error"
+    slug: history-missing-db-not-error
+    epic: "Sessions and History"
+    priority: could-have
+    personas: [P-005]
+    file: US-027-history-missing-db-not-error.md
+  - id: US-028
+    title: "resume by session id with stored-args merge"
+    slug: resume-by-session-id
+    epic: "Sessions and History"
+    priority: must-have
+    personas: [P-002]
+    file: US-028-resume-by-session-id.md
+  - id: US-029
+    title: "resume --last and the id/--last conflict exit"
+    slug: resume-last-and-conflict
+    epic: "Sessions and History"
+    priority: must-have
+    personas: [P-002, P-005]
+    file: US-029-resume-last-and-conflict.md
+  - id: US-030
+    title: "resume of an unknown id exits 2 listing recent sessions"
+    slug: resume-unknown-id-exits-2
+    epic: "Sessions and History"
+    priority: should-have
+    personas: [P-002]
+    file: US-030-resume-unknown-id-exits-2.md
+  - id: US-031
+    title: "smah-db migrate, status, rollback, and create"
+    slug: smah-db-migration-cli
+    epic: "Sessions and History"
+    priority: should-have
+    personas: [P-001]
+    file: US-031-smah-db-migration-cli.md
+  - id: US-032
+    title: "config show prints masked config to stdout"
+    slug: config-show-masked
+    epic: "Config Management"
+    priority: must-have
+    personas: [P-001, P-006]
+    file: US-032-config-show-masked.md
+  - id: US-033
+    title: "config path and config set with type coercion"
+    slug: config-path-and-set
+    epic: "Config Management"
+    priority: should-have
+    personas: [P-002]
+    file: US-033-config-path-and-set.md
+  - id: US-034
+    title: "config edit and bare config open the wizard"
+    slug: config-edit-opens-wizard
+    epic: "Config Management"
+    priority: should-have
+    personas: [P-002]
+    file: US-034-config-edit-opens-wizard.md
+  - id: US-035
+    title: "Wizard requires a real TTY, else exit 3; UI on stderr"
+    slug: wizard-tty-gate-stderr
+    epic: "Config Management"
+    priority: must-have
+    personas: [P-005, P-006]
+    file: US-035-wizard-tty-gate-stderr.md
+  - id: US-036
+    title: "Per-run --config and --database path overrides"
+    slug: config-database-path-overrides
+    epic: "Config Management"
+    priority: should-have
+    personas: [P-005]
+    file: US-036-config-database-path-overrides.md
+  - id: US-037
+    title: "doctor human report with exit code = worst finding"
+    slug: doctor-human-report
+    epic: "Doctor and Diagnostics"
+    priority: must-have
+    personas: [P-003]
+    file: US-037-doctor-human-report.md
+  - id: US-038
+    title: "doctor --json prints findings to stdout"
+    slug: doctor-json-stdout
+    epic: "Doctor and Diagnostics"
+    priority: must-have
+    personas: [P-005]
+    file: US-038-doctor-json-stdout.md
+  - id: US-039
+    title: "doctor reports key presence, never values, with no network calls"
+    slug: doctor-key-presence-no-network
+    epic: "Doctor and Diagnostics"
+    priority: must-have
+    personas: [P-001, P-006]
+    file: US-039-doctor-key-presence-no-network.md
+  - id: US-040
+    title: "models list shows catalog and resolved stage defaults"
+    slug: models-list-catalog
+    epic: "Doctor and Diagnostics"
+    priority: must-have
+    personas: [P-001]
+    file: US-040-models-list-catalog.md
+  - id: US-041
+    title: "models list with zero enabled models is a successful listing"
+    slug: models-list-zero-models
+    epic: "Doctor and Diagnostics"
+    priority: could-have
+    personas: [P-005]
+    file: US-041-models-list-zero-models.md
+  - id: US-042
+    title: "Deprecation notice contract: one line on stderr, equivalent runs"
+    slug: deprecation-notice-contract
+    epic: "Legacy Flag Back-Compat"
+    priority: must-have
+    personas: [P-002, P-005]
+    file: US-042-deprecation-notice-contract.md
+  - id: US-043
+    title: "-q/--query and top-level -i/--instructions alias ask"
+    slug: query-and-instructions-aliases
+    epic: "Legacy Flag Back-Compat"
+    priority: must-have
+    personas: [P-002, P-003]
+    file: US-043-query-and-instructions-aliases.md
+  - id: US-044
+    title: "--continue, --session, and --history alias resume and history"
+    slug: continue-session-history-aliases
+    epic: "Legacy Flag Back-Compat"
+    priority: must-have
+    personas: [P-002]
+    file: US-044-continue-session-history-aliases.md
+  - id: US-045
+    title: "--interactive points at smah chat and exits 2"
+    slug: interactive-flag-points-at-chat
+    epic: "Legacy Flag Back-Compat"
+    priority: must-have
+    personas: [P-005]
+    file: US-045-interactive-flag-points-at-chat.md
+  - id: US-046
+    title: "--configure opens the setup wizard"
+    slug: configure-alias-wizard
+    epic: "Legacy Flag Back-Compat"
+    priority: should-have
+    personas: [P-002]
+    file: US-046-configure-alias-wizard.md
+  - id: US-047
+    title: "--openai-api-key folds into --api-key with its notice"
+    slug: openai-api-key-folds-into-api-key
+    epic: "Legacy Flag Back-Compat"
+    priority: should-have
+    personas: [P-007]
+    file: US-047-openai-api-key-folds-into-api-key.md
+  - id: US-048
+    title: "Removed flags reject with exact messages and exit 2"
+    slug: removed-flags-exact-rejections
+    epic: "Legacy Flag Back-Compat"
+    priority: must-have
+    personas: [P-005]
+    file: US-048-removed-flags-exact-rejections.md
+  - id: US-049
+    title: "No execution path exists; print-only has no toggle"
+    slug: no-execution-path-print-only
+    epic: "Safety and Print-Only Guarantees"
+    priority: must-have
+    personas: [P-001]
+    file: US-049-no-execution-path-print-only.md
+  - id: US-050
+    title: "exec tags are parsed for display, never run"
+    slug: exec-tags-parsed-never-run
+    epic: "Safety and Print-Only Guarantees"
+    priority: must-have
+    personas: [P-001, P-002]
+    file: US-050-exec-tags-parsed-never-run.md
+  - id: US-051
+    title: "exec-if conditions are sandboxed by an ast whitelist"
+    slug: exec-if-ast-whitelist-sandbox
+    epic: "Safety and Print-Only Guarantees"
+    priority: must-have
+    personas: [P-001]
+    file: US-051-exec-if-ast-whitelist-sandbox.md
+  - id: US-052
+    title: "CI grep guard enforces the print-only invariant"
+    slug: ci-grep-guard-print-only
+    epic: "Safety and Print-Only Guarantees"
+    priority: must-have
+    personas: [P-001]
+    file: US-052-ci-grep-guard-print-only.md
+  - id: US-053
+    title: "Safety wording is fixed, greppable, and in --help"
+    slug: safety-wording-greppable
+    epic: "Safety and Print-Only Guarantees"
+    priority: must-have
+    personas: [P-001, P-006]
+    file: US-053-safety-wording-greppable.md
+  - id: US-054
+    title: "Delete dead executor-era code"
+    slug: delete-dead-executor-era-code
+    epic: "Safety and Print-Only Guarantees"
+    priority: could-have
+    personas: [P-001]
+    file: US-054-delete-dead-executor-era-code.md
+  - id: US-055
+    title: "Command execution or an execution toggle"
+    slug: command-execution-wont
+    epic: "Safety and Print-Only Guarantees"
+    priority: wont-have
+    personas: [P-001, P-002]
+    file: US-055-command-execution-wont.md
+  - id: US-056
+    title: "Exit-code contract 0-5 documented and enforced on every path"
+    slug: exit-code-contract
+    epic: "Scripting and Exit-Code Contract"
+    priority: must-have
+    personas: [P-005]
+    file: US-056-exit-code-contract.md
+  - id: US-057
+    title: "Non-ask commands never consume stdin"
+    slug: non-ask-commands-never-read-stdin
+    epic: "Scripting and Exit-Code Contract"
+    priority: must-have
+    personas: [P-005]
+    file: US-057-non-ask-commands-never-read-stdin.md
+  - id: US-058
+    title: "chat prints an honest not-available message and exits 2"
+    slug: chat-honest-placeholder
+    epic: "Scripting and Exit-Code Contract"
+    priority: must-have
+    personas: [P-005]
+    file: US-058-chat-honest-placeholder.md
+  - id: US-059
+    title: "Bare smah prints usage and exits 2"
+    slug: bare-smah-usage-exit-2
+    epic: "Scripting and Exit-Code Contract"
+    priority: must-have
+    personas: [P-005]
+    file: US-059-bare-smah-usage-exit-2.md
+  - id: US-060
+    title: "Stable machine-readable stdout for list-style commands"
+    slug: stable-machine-readable-stdout
+    epic: "Scripting and Exit-Code Contract"
+    priority: should-have
+    personas: [P-005]
+    file: US-060-stable-machine-readable-stdout.md
+  - id: US-061
+    title: "Unexpected internal errors exit 1 with the log path"
+    slug: unexpected-internal-error-exit-1
+    epic: "Scripting and Exit-Code Contract"
+    priority: must-have
+    personas: [P-005]
+    file: US-061-unexpected-internal-error-exit-1.md
+  - id: US-062
+    title: "Interactive chat REPL"
+    slug: interactive-chat-repl
+    epic: "Scripting and Exit-Code Contract"
+    priority: wont-have
+    personas: [P-003]
+    file: US-062-interactive-chat-repl.md
+  - id: US-063
+    title: "Missing config exits 3 and points at smah config"
+    slug: missing-config-exits-3
+    epic: "First Run and Onboarding"
+    priority: must-have
+    personas: [P-003]
+    file: US-063-missing-config-exits-3.md
+  - id: US-064
+    title: "First-run wizard captures user profile and OS facts"
+    slug: wizard-captures-profile-and-os-facts
+    epic: "First Run and Onboarding"
+    priority: must-have
+    personas: [P-003]
+    file: US-064-wizard-captures-profile-and-os-facts.md
+  - id: US-065
+    title: "Profile and system facts are injected into every prompt"
+    slug: profile-injected-into-prompts
+    epic: "First Run and Onboarding"
+    priority: must-have
+    personas: [P-001, P-003]
+    file: US-065-profile-injected-into-prompts.md
+  - id: US-066
+    title: "First-run entry point matches the README (bare smah gap)"
+    slug: first-run-entry-point-honesty
+    epic: "First Run and Onboarding"
+    priority: should-have
+    personas: [P-003]
+    file: US-066-first-run-entry-point-honesty.md
+  - id: US-067
+    title: "Setup discloses data locations and egress"
+    slug: setup-discloses-data-and-egress
+    epic: "First Run and Onboarding"
+    priority: could-have
+    personas: [P-001, P-007]
+    file: US-067-setup-discloses-data-and-egress.md
+  - id: US-068
+    title: "No color-only or ANSI-only meaning in any output"
+    slug: no-color-only-signaling
+    epic: "First Run and Onboarding"
+    priority: must-have
+    personas: [P-006]
+    file: US-068-no-color-only-signaling.md
+  - id: US-069
+    title: "Screen-reader-friendly output structure and verbosity control"
+    slug: screen-reader-output-structure
+    epic: "First Run and Onboarding"
+    priority: could-have
+    personas: [P-006]
+    file: US-069-screen-reader-output-structure.md
+  - id: US-070
+    title: "Unreachable provider fails fast with exit 5 and a clear message"
+    slug: unreachable-provider-exit-5
+    epic: "First Run and Onboarding"
+    priority: must-have
+    personas: [P-007]
+    file: US-070-unreachable-provider-exit-5.md

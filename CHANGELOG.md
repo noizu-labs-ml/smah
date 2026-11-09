@@ -1,10 +1,22 @@
 CHANGE LOG
 ==============
 
+## 2026-10-28
+- docs: add AGENT-README.md (agent orientation)
 
 ## Changes
 
 ### Unreleased
+October 27 2026
+
+- Doc sweep: `docs/PROJ-LAYOUT.md` (+ summary) and `docs/PROJ-ARCH.md`
+  (+ summary) now cover the Rust workspace scaffold (`crates/*`,
+  `ci-rs.yml`, `rust-toolchain.toml`) alongside the Python CLI; added
+  `docs/PROJ-SCHEMA.md` (+ `.summary.md`) documenting the SQLite session
+  store, checksummed migration runner, and non-relational config/contract
+  schemas; THREAT-MODEL T-007 updated (Rust CI actions SHA-pinned, Python
+  `ci.yml`/`release.yml` still tag-pinned).
+
 October 18 2026
 
 - docs: virtual-tools family index refreshed — all nine drivers shipped, per-driver contract links; THREAT-MODEL.summary.md synced for T-026…T-030 (register now 30 items: 18 mitigated · 6 partial · 3 open · 3 accepted).
