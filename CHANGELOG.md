@@ -1,6 +1,6 @@
 CHANGE LOG
 ==============
-
+- rust-ask RA-02: smah-ask crate foundation — model <exec> tag parser (title/purpose/command + owner-approved <risk>/<touches> children, <cot> dropped, malformed tags degrade to prose), local static risk classifier (rm -rf /, dd of=/dev/*, mkfs*, iptables -F, chmod -R 777 /, fork bombs, curl|sh, redirect-to-device; quoted spans ignored; quoted fork bombs still escalate) that always escalates irreversible-class patterns to the red [!] DESTRUCTIVE banner labelled guidance-not-a-guarantee, and TTY/plain/JSON suggestion rendering (numbered blocks, model-guidance labels). 29 unit tests.
 ## 2026-11-09
 - retire PyPI release lane: .github/workflows/release.yml deleted (PyPI Trusted Publishing on v* tags) — Python package on PyPI frozen at 0.2.0, deprecated, NOT yanked; README deprecation note, Installation now leads with `cargo install --git https://github.com/noizu-labs-ml/smah smah-cli` (Rust toolchain, MSRV 1.82); PROJ-LAYOUT + THREAT-MODEL T-007 mentions synced (#37). → stage → main (#38/#39).
 - docs(plans): add mallm fold-in plan — phased Rust port of mallm into a `smah-docs` crate + `smah docs` subcommand, with the help-capture exec question flagged as an owner decision (`docs/plans/mallm-fold.md`)
