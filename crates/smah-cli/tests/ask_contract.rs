@@ -386,8 +386,9 @@ async fn provider_401_maps_to_exit_4() {
 
 #[tokio::test]
 async fn json_mode_error_paths_keep_exit_codes() {
-    // --json does not change failure behavior: usage error still exits 2
-    // with human guidance on stderr and nothing on stdout.
+    // --json does not change failure behavior: the missing required query
+    // is still a clap-owned usage error — exit 2, guidance on stderr,
+    // nothing on stdout.
     let sandbox = Sandbox::new();
     let server = MockServer::start().await;
     Mock::given(method("POST"))
@@ -398,7 +399,7 @@ async fn json_mode_error_paths_keep_exit_codes() {
         .await;
 
     let output = sandbox
-        .ask(&server, &["--json"], &["--max-input-chars"])
+        .ask(&server, &[], &["--json"])
         .write_stdin("")
         .output()
         .expect("run smah");

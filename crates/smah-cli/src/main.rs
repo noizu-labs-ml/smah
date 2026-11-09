@@ -8,12 +8,14 @@
 mod args;
 mod ask_cmd;
 mod backend;
+mod config_cmd;
 mod emulate;
 mod hooks;
 mod tools_list;
 
 use args::{split_emulate_tail, Cli, Command};
-use clap::Parser;
+use clap::{CommandFactory, Parser};
+use std::io::IsTerminal;
 
 fn main() {
     // The emulate path takes a manual argv split (see [`split_emulate_tail`])
@@ -23,18 +25,26 @@ fn main() {
     }
 
     let cli = Cli::parse();
-    // Subcommands otherwise; bare `smah` gets the honest not-yet notice
-    // (exit 2) — never a fake of the M5 surface.
+    // Subcommands otherwise. Bare `smah` shows help (exit 0) — on a TTY
+    // with no config it first offers `smah config init` (RA-06).
     let code = match &cli.command {
         Some(Command::Ask(ask)) => ask_cmd::run_ask(&cli, ask),
+        Some(Command::Config { cmd }) => config_cmd::run_config(cli.config.as_deref(), cmd),
         Some(Command::Tools { cmd }) => tools_list::run(cmd),
         Some(Command::Hooks { cmd }) => hooks::run(cmd),
         None => {
-            eprintln!(
-                "smah: the interactive surface (chat, history) is not in this build yet (M5). \
-Available now: smah ask \"<question>\", smah --emulate-cli <tool> [args], smah tools list, smah hooks zsh|bash|envrc|shims."
-            );
-            smah_core::ExitCode::Usage.code()
+            let config_exists = cli
+                .config
+                .as_ref()
+                .map(|p| p.exists())
+                .unwrap_or_else(|| smah_core::settings::Settings::default_path().exists());
+            if std::io::stdin().is_terminal() && !config_exists {
+                eprintln!(
+                    "smah: no config found — run `smah config init` to set up a provider, key, and profile."
+                );
+            }
+            let _ = Cli::command().print_help();
+            0
         }
     };
     std::process::exit(code);

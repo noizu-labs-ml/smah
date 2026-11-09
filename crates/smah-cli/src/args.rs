@@ -114,12 +114,76 @@ pub enum Command {
         #[command(subcommand)]
         cmd: ToolsCommand,
     },
+    /// Configuration (`smah config init` — RA-06).
+    Config {
+        /// `smah config <verb>`.
+        #[command(subcommand)]
+        cmd: ConfigSubCommand,
+    },
     /// Shell-hook registration for installed tools.
     Hooks {
         /// `smah hooks <target>`.
         #[command(subcommand)]
         cmd: HooksCommand,
     },
+}
+
+/// `smah config ...` verbs.
+#[derive(Subcommand, Debug)]
+pub enum ConfigSubCommand {
+    /// Guided first-run setup: provider + API key (masked), profile,
+    /// data-egress toggles. Non-interactive (or non-TTY) uses flags/env.
+    Init(ConfigInitArgs),
+}
+
+/// `smah config init` arguments (RA-06).
+#[derive(clap::Args, Debug)]
+pub struct ConfigInitArgs {
+    /// Provider to configure (default anthropic; one of the registry keys).
+    #[arg(long, value_name = "KEY")]
+    pub provider: Option<String>,
+
+    /// Store `$VAR` (env reference) as the api key instead of a literal —
+    /// headless setups; VAR must be set at run time.
+    #[arg(long, value_name = "VAR")]
+    pub key_env: Option<String>,
+
+    /// No prompts: flags/env only (implied when stdin is not a TTY).
+    #[arg(long)]
+    pub non_interactive: bool,
+
+    /// Overwrite an existing config.
+    #[arg(long)]
+    pub force: bool,
+
+    /// Profile: your name.
+    #[arg(long)]
+    pub name: Option<String>,
+
+    /// Profile: your role.
+    #[arg(long)]
+    pub role: Option<String>,
+
+    /// Profile: Linux/ops experience.
+    #[arg(long)]
+    pub experience: Option<String>,
+
+    /// Profile: anything else the model should know.
+    #[arg(long)]
+    pub about: Option<String>,
+
+    /// Egress opt-out: do not send the profile block.
+    #[arg(long)]
+    pub no_share_profile: bool,
+
+    /// Egress opt-out: do not send the system-details block.
+    #[arg(long)]
+    pub no_share_stats: bool,
+
+    /// Write target override (same as the global -c; kept local so
+    /// `smah config init --config X` reads naturally).
+    #[arg(long, value_name = "PATH")]
+    pub config_path: Option<PathBuf>,
 }
 
 /// `smah ask` arguments (RA-01).
