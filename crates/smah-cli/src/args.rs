@@ -135,11 +135,19 @@ pub fn split_emulate_tail() -> Option<(Cli, String, Vec<String>)> {
 /// Subcommands seeded by the virtual-tools milestone.
 #[derive(Subcommand, Debug)]
 pub enum Command {
+    /// One-shot question answering (RA-01): `smah ask "<question>"`.
+    Ask(AskArgs),
     /// Virtual-tool discovery.
     Tools {
         /// `smah tools list` — the only tools verb in this build.
         #[command(subcommand)]
         cmd: ToolsCommand,
+    },
+    /// Configuration (`smah config init` — RA-06).
+    Config {
+        /// `smah config <verb>`.
+        #[command(subcommand)]
+        cmd: ConfigSubCommand,
     },
     /// Shell-hook registration for installed tools.
     Hooks {
@@ -147,12 +155,153 @@ pub enum Command {
         #[command(subcommand)]
         cmd: HooksCommand,
     },
+    /// Provider/config health check (RA-07): no network calls, no key
+    /// material shown — presence only.
+    Doctor(DoctorArgs),
+    /// Interactive chat over a persisted session (RA-03): the standing
+    /// keys — [c]opy [e]dit [r]efine [n]ext [q]uit.
+    Chat {
+        /// The opening question.
+        #[arg(trailing_var_arg = true, required = true)]
+        query: Vec<String>,
+    },
+    /// Resume a saved session (RA-03): `--last` or a session id.
+    Resume {
+        /// Resume the most recently modified session.
+        #[arg(long)]
+        last: bool,
+        /// Session id to resume.
+        #[arg(value_name = "ID")]
+        id: Option<i64>,
+    },
     /// Script-wrapper discovery and deterministic planning (print-only).
     Wrapper {
         /// `smah wrapper <verb>`.
         #[command(subcommand)]
         cmd: WrapperCommand,
     },
+}
+
+/// `smah doctor` flags.
+#[derive(clap::Args, Debug)]
+pub struct DoctorArgs {
+    /// Emit machine-readable JSON on stdout instead of the human report.
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// `smah config ...` verbs.
+#[derive(Subcommand, Debug)]
+pub enum ConfigSubCommand {
+    /// Guided first-run setup: provider + API key (masked), profile,
+    /// data-egress toggles. Non-interactive (or non-TTY) uses flags/env.
+    /// The key is stored in a secret store (OS keychain / credential
+    /// manager / Secret Service, a 0600 secrets file, or an env reference);
+    /// config.yaml keeps a reference only.
+    Init(ConfigInitArgs),
+    /// Move literal API keys out of config.yaml into the secret store
+    /// (keychain or the 0600 secrets file), rewriting the config to hold
+    /// references. `smah doctor` names this when it finds a literal.
+    MigrateSecrets(ConfigMigrateArgs),
+}
+
+/// `smah config migrate-secrets` arguments (RA-10 F2).
+#[derive(clap::Args, Debug)]
+pub struct ConfigMigrateArgs {
+    /// Destination store: keychain (OS store) or file (0600 secrets.yaml
+    /// beside the config). Default: best available.
+    #[arg(long, value_name = "STORE")]
+    pub secret_store: Option<String>,
+
+    /// Config override (same as the global -c).
+    #[arg(long, value_name = "PATH")]
+    pub config_path: Option<PathBuf>,
+}
+
+/// `smah config init` arguments (RA-06).
+#[derive(clap::Args, Debug)]
+pub struct ConfigInitArgs {
+    /// Provider to configure (default anthropic; one of the registry keys).
+    #[arg(long, value_name = "KEY")]
+    pub provider: Option<String>,
+
+    /// Store `$VAR` (env reference) as the api key instead of a literal —
+    /// headless setups; VAR must be set at run time.
+    #[arg(long, value_name = "VAR")]
+    pub key_env: Option<String>,
+
+    /// Where the API key lives: `keychain` (OS keychain / credential
+    /// manager / Secret Service), `file` (0600 secrets.yaml beside the
+    /// config), or `env` (a reference; pair with --key-env). Default: best
+    /// available — the OS store, falling back to the file when none is
+    /// reachable (headless Linux without a D-Bus session bus).
+    #[arg(long, value_name = "STORE")]
+    pub secret_store: Option<String>,
+
+    /// No prompts: flags/env only (implied when stdin is not a TTY).
+    #[arg(long)]
+    pub non_interactive: bool,
+
+    /// Overwrite an existing config.
+    #[arg(long)]
+    pub force: bool,
+
+    /// Profile: your name.
+    #[arg(long)]
+    pub name: Option<String>,
+
+    /// Profile: your role.
+    #[arg(long)]
+    pub role: Option<String>,
+
+    /// Profile: Linux/ops experience.
+    #[arg(long)]
+    pub experience: Option<String>,
+
+    /// Profile: anything else the model should know.
+    #[arg(long)]
+    pub about: Option<String>,
+
+    /// Egress opt-out: do not send the profile block.
+    #[arg(long)]
+    pub no_share_profile: bool,
+
+    /// Egress opt-out: do not send the system-details block.
+    #[arg(long)]
+    pub no_share_stats: bool,
+
+    /// Write target override (same as the global -c; kept local so
+    /// `smah config init --config X` reads naturally).
+    #[arg(long, value_name = "PATH")]
+    pub config_path: Option<PathBuf>,
+}
+
+/// `smah ask` arguments (RA-01).
+#[derive(clap::Args, Debug)]
+pub struct AskArgs {
+    /// The question (quoted, or bare words). Piped stdin is attached to the
+    /// model as data — it still needs a question.
+    #[arg(trailing_var_arg = true, required = true)]
+    pub query: Vec<String>,
+
+    /// Additional operator instructions for this ask (a text file).
+    #[arg(short = 'i', long, value_name = "PATH")]
+    pub instructions: Option<PathBuf>,
+
+    /// Emit machine-readable JSON on stdout instead of streamed prose +
+    /// blocks (place before the question). Diagnostics stay on stderr;
+    /// exit codes are unchanged.
+    #[arg(long)]
+    pub json: bool,
+
+    /// Force a clipboard copy attempt even if config disabled it
+    /// (single-command answers only).
+    #[arg(long)]
+    pub copy: bool,
+
+    /// Never touch the clipboard this run.
+    #[arg(long)]
+    pub no_copy: bool,
 }
 
 /// `smah tools ...`

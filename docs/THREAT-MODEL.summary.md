@@ -25,7 +25,7 @@ argv — dry-run by default, per-step confirmation + timeouts,
 metadata-only redacted audit; model output enters only as a structured,
 re-validated changes object behind an explicit accept).
 
-**Register (36)**: 23 mitigated · 7 partial · 3 open · 3 accepted.
+**Register (37)**: 24 mitigated · 7 partial · 3 open · 3 accepted.
 
 | ID | Sev | Item | Status |
 |----|-----|------|--------|
@@ -65,6 +65,7 @@ re-validated changes object behind an explicit accept).
 | T-034 | Low | Secret leakage via prompt cache on disk / audit argv lines (SW-03/05) | Mitigated |
 | T-035 | Low | Output-capture exhaustion — runaway step stdout into `{{steps.*}}` bindings | Mitigated |
 | T-036 | Med | Approval forgery / stale-stamp transfer — hand-edited or stale `approved:` executes unreviewed changes (SW-05) | Mitigated |
+| T-037 | High | Provider API key stored as a literal in `config.yaml` — init now stores it in a per-OS secret store (keychain / 0600 secrets file / env ref); `migrate-secrets` + `doctor` clean up existing literals (RA-10) | Mitigated |
 
 **Key controls (verified)**: print-only test + CI grep gate (Rust gate
 amended to execution primitives only — `Command::new`/`process::Command`/

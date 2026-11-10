@@ -57,7 +57,7 @@ the best output format, runner model, additional instructions nad other details.
 ```
 cargo install --git https://github.com/noizu-labs-ml/smah smah-cli
 ## needs a Rust toolchain (MSRV 1.82); then run smah to begin setup
-smah config
+smah config init
 ```
 
 ### Pip Install (deprecated — frozen at 0.2.0)
@@ -79,21 +79,64 @@ or
 - set SMAH_OPENAI_API_KEY env variable or set key in your smah config file `~/.smah/config.yaml`
 - run smah config
 
+## Quick Start (Rust build)
+
+```
+smah config init --provider anthropic   # guided setup: profile + masked API key
+                                        # (headless: flags + SMAH_ANTHROPIC_API_KEY)
+smah ask "what is eating my disk?"      # one-shot answer; prints commands, never runs them
+df -h | smah ask "why is / nearly full?" # piped stdin rides along as data
+smah chat "tune journald"               # interactive loop: [c]opy [e]dit [r]efine [n]ext [q]uit
+smah resume --last                      # pick the thread back up
+smah doctor                             # provider/config health (no network calls)
+```
+
+Every suggested command is printed for you to run yourself — smah is
+print-only and never executes anything it proposes (see
+[THREAT-MODEL.md](THREAT-MODEL.md)).
+
+## Where your API key lives
+
+`smah config init` never writes a literal key into `config.yaml`. The key
+goes to the best secret store available on your OS and the config keeps a
+reference only:
+
+| OS | default store |
+|----|---------------|
+| macOS | Keychain (`keychain:smah/<provider>`) |
+| Windows | Credential Manager (`keychain:smah/<provider>`) |
+| Linux / BSD | Secret Service over D-Bus — pure-Rust zbus, no libdbus, no subprocesses; headless (no session bus) falls back to `~/.smah/secrets.yaml` (created `0600`, atomic writes, loud notice) |
+
+Pick the destination explicitly with `smah config init --secret-store
+keychain|file|env` (`env` keeps an `env:VAR` reference for headless
+setups — pair it with `--key-env`). At run time the environment chain
+(`SMAH_<PROVIDER>_API_KEY`, then `<PROVIDER>_API_KEY`) overrides any stored
+reference, and every resolved key is registered with the log redactor so
+debug output stays masked.
+
+Already have a literal in your config? `smah doctor` warns about it, and
+`smah config migrate-secrets` moves it into the store and rewrites the
+config to hold a reference.
+
 ## Commands
 
 ```
-smah ask "<question>"     one-shot question; piped stdin is the data
-smah chat                 interactive session (not implemented yet — exits 2 with a notice)
-smah history              list recent sessions
-smah resume [ID|--last]   resume a session
-smah config [show|path|edit|set]   run setup, or inspect/edit the config (secrets masked)
-smah models list          list configured models and defaults
-smah doctor               check the installation (config, key presence, models, database)
+smah ask "<question>"     one-shot question; piped stdin is the data; on a terminal it continues into chat
+smah chat "<question>"    interactive session — [c]opy [e]dit [r]efine [n]ext [q]uit (terminal only)
+smah resume [ID|--last]   resume a saved session (terminal only)
+smah config init          guided first-run setup (masked key entry; headless via flags/env)
+smah doctor               check the installation (config, key presence — no key material shown)
+smah tools list           list installed virtual tools
+smah hooks zsh|bash|envrc|shims   register shell hooks for installed tools
 ```
 
-All older flags (`-q`, `-i`, `--continue`, `--session`, `--history`, `--interactive`,
-`--configure`, `--openai-api-key`) still work and map to the commands above; each
-prints a one-line `[deprecation]` notice on stderr. They are removed in 0.4.
+`smah history` and `smah models` are not in the Rust build yet (planned;
+see docs/ux/interface-spec.md).
+
+The deprecated Python 0.2.x lane (`pip install smah`) still accepts the older
+flags (`-q`, `-i`, `--continue`, `--session`, `--history`, `--interactive`,
+`--configure`, `--openai-api-key`) with a `[deprecation]` notice; the Rust
+build does not carry them.
 
 ## Examples
 

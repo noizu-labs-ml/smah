@@ -8,6 +8,7 @@ pub mod console;
 pub mod errors;
 pub mod exit_codes;
 pub mod logging;
+pub mod secrets;
 pub mod settings;
 pub mod virtual_tools;
 pub mod wrappers;
