@@ -58,8 +58,16 @@ impl Sandbox {
         cmd.env("SMAH_WRAPPERS_DIR", &self.wrappers)
             .env("XDG_STATE_HOME", &self.state)
             .env("XDG_CONFIG_HOME", self._root.path().join("config"))
-            .env("XDG_CACHE_HOME", self._root.path().join("cache"));
+            .env("XDG_CACHE_HOME", self._root.path().join("cache"))
+            // The audit HMAC key lives at `~/.smah/audit.key` — keep it in
+            // the sandbox too, never the real home.
+            .env("HOME", self._root.path());
         cmd
+    }
+
+    /// The sandboxed audit HMAC key path (`$HOME/.smah/audit.key`).
+    fn audit_key_path(&self) -> PathBuf {
+        self._root.path().join(".smah").join("audit.key")
     }
 
     fn audit_lines(&self) -> Vec<String> {
@@ -298,9 +306,10 @@ fn timeout_kills_the_whole_process_group_and_audits_first() {
 }
 
 #[test]
-fn audit_records_every_param_as_name_plus_sha_prefix_unless_plain() {
-    // M1 end-to-end: the required param's value is a name + sha256 prefix;
-    // the `audit: plain` opt-in keeps its value (post-redactor).
+fn audit_records_every_param_as_name_plus_hmac_prefix_unless_plain() {
+    // M1 end-to-end: the required param's value is a name + KEYED HMAC
+    // prefix (stable within one install, un-brute-forceable offline); the
+    // `audit: plain` opt-in keeps its value (post-redactor).
     let sb = Sandbox::new();
     let wrapper = "---\n\
 name: demo\ndescription: d\n\
@@ -325,8 +334,23 @@ steps:\n  - id: s1\n    run: [\"echo\", \"{{params.token}}\", \"{{params.label}}
         "the param value never lands verbatim: {joined}"
     );
     assert!(
-        joined.contains("\"token\":\"sha256:"),
-        "named + hashed: {joined}"
+        joined.contains("\"token\":\"hmac:"),
+        "named + keyed-HMAC: {joined}"
+    );
+    assert!(
+        !joined.contains("sha256:"),
+        "no unkeyed sha256 prefix tokens: {joined}"
+    );
+    // The token is `hmac:` + exactly 16 lowercase hex chars.
+    let token = joined
+        .split("\"token\":\"hmac:")
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .expect("token value");
+    assert_eq!(token.len(), 16, "16-hex prefix: {token}");
+    assert!(
+        token.chars().all(|c| c.is_ascii_hexdigit()),
+        "hex only: {token}"
     );
     assert!(
         joined.contains("public"),
@@ -343,6 +367,74 @@ steps:\n  - id: s1\n    run: [\"echo\", \"{{params.token}}\", \"{{params.label}}
         .find(|l| l.contains("\"decision\":\"started\""))
         .expect("started record");
     assert!(!started.contains("hunter2-secret"), "{started}");
+
+    // The per-install key landed in the sandbox home, and correlation
+    // holds: a second run of the same value yields the SAME token (the
+    // key file is authoritative), a different value a DIFFERENT token.
+    let key_path = sb.audit_key_path();
+    assert!(key_path.exists(), "audit key created on first use");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&key_path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600, "key file is 0600: {mode:o}");
+    }
+    sb.run()
+        .args([
+            "demo",
+            "--execute",
+            "--yes",
+            "--param",
+            "token=hunter2-secret",
+        ])
+        .assert()
+        .code(0);
+    sb.run()
+        .args(["demo", "--execute", "--yes", "--param", "token=other-value"])
+        .assert()
+        .code(0);
+    let lines = sb.audit_lines();
+    // Three runs: hunter2-secret twice, then other-value once. Every
+    // record (started + finished) carries the params map.
+    let toks: Vec<String> = lines
+        .iter()
+        .filter_map(|l| {
+            l.split("\"token\":\"hmac:")
+                .nth(1)
+                .and_then(|rest| rest.split('"').next())
+                .map(String::from)
+        })
+        .collect();
+    assert_eq!(
+        toks.len(),
+        6,
+        "started+finished per run carry the token: {lines:?}"
+    );
+    assert!(
+        toks[..4].iter().all(|t| *t == toks[0]),
+        "same value ⇒ same token within one install: {toks:?}"
+    );
+    assert!(
+        toks[4..].iter().all(|t| *t != toks[0]),
+        "different value ⇒ different token: {toks:?}"
+    );
+}
+
+#[test]
+fn unusable_audit_key_refuses_to_execute_fail_closed() {
+    // M1 follow-up: the audit HMAC key is part of the fail-closed audit
+    // apparatus — if it cannot be created or read, nothing executes.
+    let sb = Sandbox::new();
+    sb.write_wrapper("demo", WRAPPER);
+    sb.approve("demo");
+    let blocker = sb._root.path().join("home-blocker");
+    std::fs::write(&blocker, "x").expect("blocker file");
+    sb.run()
+        .env("HOME", &blocker) // ~/.smah/audit.key cannot be created
+        .args(["demo", "--execute", "--yes"])
+        .assert()
+        .code(1)
+        .stderr(predicates::str::contains("audit key unavailable"));
 }
 
 #[test]
