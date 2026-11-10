@@ -10,6 +10,7 @@ pub mod logging;
 pub mod secrets;
 pub mod settings;
 pub mod virtual_tools;
+pub mod wrappers;
 
 pub use errors::SmahError;
 pub use exit_codes::ExitCode;
