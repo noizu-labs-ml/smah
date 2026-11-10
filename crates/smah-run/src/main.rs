@@ -39,9 +39,14 @@
 //!   write fails the step does NOT run. An unusable audit therefore blocks
 //!   execution rather than allowing an unaudited run;
 //! - **redaction (M1)**: EVERY param value is recorded as its name plus a
-//!   `sha256:<12-hex prefix>` token by default; a param may opt its value
-//!   in for verbatim audit with `audit: plain` in the wrapper schema (the
-//!   value still passes the registered-secret redactor).
+//!   `hmac:<16-hex>` token by default — an HMAC-SHA256 under a per-install
+//!   32-byte key at `~/.smah/audit.key` (mode 0600, created atomically on
+//!   first use), so the unkeyed-prefix offline brute force against
+//!   low-entropy values is gone while correlation still works within one
+//!   install; a param may opt its value in for verbatim audit with
+//!   `audit: plain` in the wrapper schema (the value still passes the
+//!   registered-secret redactor). An unusable audit key fails CLOSED like
+//!   the audit write itself — the step does not run.
 //!
 //! Exit codes (mirrors the smah six-class table where it applies):
 //! 0 success · 2 usage · 3 config (invalid wrapper) ·
@@ -201,8 +206,22 @@ fn run() -> i32 {
     }
 
     let run_id = uuid::Uuid::new_v4().to_string();
+    // M1 follow-up: audit tokens are KEYED HMACs under a per-install
+    // 32-byte key (`~/.smah/audit.key`, 0600). An unusable key fails
+    // CLOSED — an unauditable (or un-tokenizable) run is exactly the C2
+    // hazard, so the step never executes.
+    let audit_key = match smah_core::audit_key::load_or_create() {
+        Ok(key) => key,
+        Err(reason) => {
+            eprintln!(
+                "smah-run: audit key unavailable ({reason}) — refusing to execute \
+                 (fail-closed: param values cannot be redacted without the audit key)."
+            );
+            return 1;
+        }
+    };
     let audit = RunAudit::open();
-    let param_tokens = audit_param_tokens(&wrapper, &supplied);
+    let param_tokens = audit_param_tokens(&wrapper, &supplied, &audit_key);
     let param_record: BTreeMap<String, String> = param_tokens
         .iter()
         .map(|(name, _, token)| (name.clone(), token.clone()))
@@ -370,8 +389,9 @@ struct StepRecord {
     /// Redacted, space-joined argv (or the built-in display argv): every
     /// param value replaced by its audit token (M1).
     argv: String,
-    /// Param name → audit token: `sha256:<12-hex prefix>` by default, the
-    /// declared value (post-redactor) for `audit: plain` params.
+    /// Param name → audit token: `hmac:<16-hex>` (keyed HMAC-SHA256) by
+    /// default, the declared value (post-redactor) for `audit: plain`
+    /// params.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     params: BTreeMap<String, String>,
     /// started | finished | skipped | aborted.
@@ -447,12 +467,16 @@ impl RunAudit {
 
 /// Effective param rows for audit: (name, value, token), longest value
 /// first (safe argv replacement when one value contains another). M1: the
-/// token is `sha256:<12-hex prefix>` for every param unless it declares
-/// `audit: plain` — then the value survives verbatim (still through the
-/// registered-secret redactor). Defaults redact like supplied values.
+/// token is `hmac:<16-hex>` — an HMAC-SHA256 under the per-install audit
+/// key (`~/.smah/audit.key`) — for every param unless it declares
+/// `audit: plain`, then the value survives verbatim (still through the
+/// registered-secret redactor). Keyed tokens cannot be brute-forced
+/// offline; correlation within one install still holds (same value ⇒ same
+/// token). Defaults redact like supplied values.
 fn audit_param_tokens(
     wrapper: &loader::WrapperDef,
     supplied: &BTreeMap<String, String>,
+    audit_key: &[u8],
 ) -> Vec<(String, String, String)> {
     let mut rows = Vec::new();
     for p in &wrapper.params {
@@ -462,7 +486,10 @@ fn audit_param_tokens(
         let token = if p.audit_plain {
             redact(&value)
         } else {
-            format!("sha256:{}", &prompt::sha256_hex(value.as_bytes())[..12])
+            format!(
+                "hmac:{}",
+                &smah_core::audit_key::hmac_sha256_hex(audit_key, value.as_bytes())[..16]
+            )
         };
         rows.push((p.name.clone(), value, token));
     }
@@ -871,6 +898,10 @@ mod tests {
         loader::parse_wrapper(raw, "demo", &HashSet::new()).expect("loads")
     }
 
+    /// A fixed 32-byte audit key for unit-level token assertions (the real
+    /// per-install key comes from `~/.smah/audit.key` at execution time).
+    const TEST_KEY: &[u8] = &[0xA5u8; 32];
+
     /// Both params DEFAULT-redacted (no `audit:` key anywhere).
     const REDACT_WRAPPER: &str = "---\n\
 name: demo\ndescription: d\n\
@@ -885,12 +916,12 @@ steps:\n  - id: s1\n    run: [\"true\"]\n---\n";
 
     #[test]
     fn all_param_values_hashed_in_audit_by_default() {
-        // M1: EVERY param value is a name + sha256 prefix in the audit by
-        // default — including values whose param name sounds harmless.
+        // M1: EVERY param value is a name + keyed HMAC prefix in the audit
+        // by default — including values whose param name sounds harmless.
         let def = def_of(REDACT_WRAPPER);
         let mut supplied = BTreeMap::new();
         supplied.insert("token".to_string(), "hunter2".to_string());
-        let tokens = audit_param_tokens(&def, &supplied);
+        let tokens = audit_param_tokens(&def, &supplied, TEST_KEY);
         let argv = vec![
             "curl".to_string(),
             "-H".to_string(),
@@ -903,30 +934,39 @@ steps:\n  - id: s1\n    run: [\"true\"]\n---\n";
             !redacted.contains("public"),
             "defaults hash too: {redacted}"
         );
-        assert!(redacted.contains("sha256:"), "{redacted}");
+        assert!(redacted.contains("hmac:"), "{redacted}");
         // The record map: name → token for BOTH params.
         let record: BTreeMap<String, String> = tokens
             .iter()
             .map(|(n, _, t)| (n.clone(), t.clone()))
             .collect();
         let label = record.get("label").expect("label row");
-        assert!(label.starts_with("sha256:"), "{label}");
+        assert!(label.starts_with("hmac:"), "{label}");
         let tok = record.get("token").expect("token row");
-        assert!(tok.starts_with("sha256:"));
-        assert_eq!(tok.len(), "sha256:".len() + 12);
+        assert!(tok.starts_with("hmac:"));
+        assert_eq!(tok.len(), "hmac:".len() + 16);
+        // Keyed: same value + same key ⇒ same token; a different key
+        // ⇒ a different token (no unkeyed-prefix brute force).
+        let other_key_tokens = audit_param_tokens(&def, &supplied, &[0u8; 32]);
+        let other_tok = other_key_tokens
+            .iter()
+            .find(|(n, _, _)| n == "token")
+            .map(|(_, _, t)| t.clone())
+            .expect("token row under other key");
+        assert_ne!(tok, &other_tok, "tokens depend on the install key");
     }
 
     #[test]
     fn defaults_redact_like_supplied_values() {
         let def = def_of(REDACT_WRAPPER);
         // No --param at all: the label default 'public' still hashes.
-        let tokens = audit_param_tokens(&def, &BTreeMap::new());
+        let tokens = audit_param_tokens(&def, &BTreeMap::new(), TEST_KEY);
         let record: BTreeMap<String, String> = tokens
             .iter()
             .map(|(n, _, t)| (n.clone(), t.clone()))
             .collect();
         let label = record.get("label").expect("default row present");
-        assert!(label.starts_with("sha256:"), "defaults hash too: {label}");
+        assert!(label.starts_with("hmac:"), "defaults hash too: {label}");
         assert!(!label.contains("public"));
     }
 
@@ -935,17 +975,14 @@ steps:\n  - id: s1\n    run: [\"true\"]\n---\n";
         let def = def_of(PLAIN_WRAPPER);
         let mut supplied = BTreeMap::new();
         supplied.insert("token".to_string(), "hunter2".to_string());
-        let tokens = audit_param_tokens(&def, &supplied);
+        let tokens = audit_param_tokens(&def, &supplied, TEST_KEY);
         let record: BTreeMap<String, String> = tokens
             .iter()
             .map(|(n, _, t)| (n.clone(), t.clone()))
             .collect();
         // Opt-in keeps the value (post-redactor); everything else hashes.
         assert_eq!(record.get("label").map(String::as_str), Some("public"));
-        assert!(record
-            .get("token")
-            .expect("token row")
-            .starts_with("sha256:"));
+        assert!(record.get("token").expect("token row").starts_with("hmac:"));
         let argv = vec![
             "curl".to_string(),
             "x:hunter2".to_string(),

@@ -6,14 +6,20 @@
 //! matching code.
 
 mod args;
+mod ask_cmd;
 mod backend;
+mod chat_cmd;
+mod config_cmd;
+mod doctor_cmd;
 mod emulate;
 mod hooks;
+mod pipe;
 mod tools_list;
 mod wrapper_cmd;
 
 use args::{split_emulate_tail, Cli, Command};
-use clap::Parser;
+use clap::{CommandFactory, Parser};
+use std::io::IsTerminal;
 
 fn main() {
     // argv[0] postfix dispatch: `smah-<name>` (symlink) where <name> is an
@@ -43,19 +49,30 @@ fn main() {
         }
         std::process::exit(wrapper_cmd::run_flag(name, &cli.param));
     }
-    // Subcommands otherwise; bare `smah` gets the honest not-yet notice
-    // (exit 2) — never a fake of the M5 surface.
+    // Subcommands otherwise. Bare `smah` shows help (exit 0) — on a TTY
+    // with no config it first offers `smah config init` (RA-06).
     let code = match &cli.command {
+        Some(Command::Ask(ask)) => ask_cmd::run_ask(&cli, ask),
+        Some(Command::Config { cmd }) => config_cmd::run_config(cli.config.as_deref(), cmd),
+        Some(Command::Doctor(args)) => doctor_cmd::run_doctor(args, cli.config.as_deref()),
+        Some(Command::Chat { query }) => chat_cmd::run_chat(&cli, query),
+        Some(Command::Resume { last, id }) => chat_cmd::run_resume(&cli, *last, *id),
         Some(Command::Tools { cmd }) => tools_list::run(cmd),
         Some(Command::Hooks { cmd }) => hooks::run(cmd),
         Some(Command::Wrapper { cmd }) => wrapper_cmd::run_sub(cmd),
         None => {
-            eprintln!(
-                "smah: the full command surface (ask, chat, history) is not in this build yet (M5). \
-Available now: smah --emulate-cli <tool> [args], smah --wrapper <name> [--param k=v], smah tools list, \
-smah wrapper list|show|validate, smah hooks zsh|bash|envrc|shims."
-            );
-            smah_core::ExitCode::Usage.code()
+            let config_exists = cli
+                .config
+                .as_ref()
+                .map(|p| p.exists())
+                .unwrap_or_else(|| smah_core::settings::Settings::default_path().exists());
+            if std::io::stdin().is_terminal() && !config_exists {
+                eprintln!(
+                    "smah: no config found — run `smah config init` to set up a provider, key, and profile."
+                );
+            }
+            let _ = Cli::command().print_help();
+            0
         }
     };
     std::process::exit(code);

@@ -40,6 +40,25 @@ smah-vtool-http = { path = "../smah-vtool-http" }
 # tool.sha256 staleness markers for the virtual-tools contract caches (#20/#19).
 sha2 = { workspace = true }
 
+# Secret stores (RA-10 F2): one seam, per-OS backends. Each platform compiles
+# only its own backend, and none of them shells out (print-only invariant):
+# `apple-native` = security-framework FFI to the macOS Keychain,
+# `windows-native` = Win32 credential-manager FFI, and on Linux/BSD the
+# freedesktop Secret Service over pure-Rust D-Bus: keyring's
+# `async-secret-service` feature builds on the `secret-service` crate atop
+# `zbus` (a userspace D-Bus wire-protocol implementation over unix sockets —
+# no libdbus, no libsecret, no helper process; `sync-secret-service` was
+# rejected because it links libdbus FFI). `crypto-rust` keeps the Secret
+# Service session crypto pure Rust too. Source citation in docs/THREAT-MODEL.md.
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
+keyring = { version = "3", features = ["async-secret-service", "tokio", "crypto-rust"] }
+
 [dev-dependencies]
 insta = { workspace = true }
 tempfile = { workspace = true }

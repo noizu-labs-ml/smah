@@ -3,10 +3,12 @@
 //! checks. Milestone M1 lands the domain floor: exit codes, the §4 error
 //! contract, the console split, redacted logging, and the settings loader.
 
+pub mod audit_key;
 pub mod console;
 pub mod errors;
 pub mod exit_codes;
 pub mod logging;
+pub mod secrets;
 pub mod settings;
 pub mod virtual_tools;
 pub mod wrappers;
