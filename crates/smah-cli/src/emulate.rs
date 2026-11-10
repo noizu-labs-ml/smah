@@ -6,7 +6,9 @@
 //! resolves the driver from the tool file; `--emulate-cli` forces the cli
 //! driver (compat form). Everything before the dispatch is shared prelude.
 
-use std::io::{IsTerminal, Read};
+use std::io::IsTerminal;
+
+use crate::pipe::read_stdin;
 use std::path::PathBuf;
 
 use smah_core::errors::SmahError;
@@ -225,31 +227,6 @@ fn init_logfile() -> PathBuf {
     smah_core::logging::init().unwrap_or_else(|_| PathBuf::from("smah.log"))
 }
 
-/// Real-stdin wrapper over [`read_stdin_from`]: `is_tty` short-circuits (a
-/// TTY is never read — §5). `None` truncation means nothing was read (TTY or
-/// read error); `Some((sent, total))` marks a loud truncation.
-fn read_stdin(cap: usize, is_tty: bool) -> (Option<String>, Option<(usize, usize)>) {
-    if is_tty {
-        return (None, None);
-    }
-    let mut stdin = std::io::stdin().lock();
-    let (text, total) = read_stdin_from(&mut stdin, cap);
-    let truncation = (total > cap).then_some((text.len(), total));
-    (Some(text), truncation)
-}
-
-/// Capped read of an arbitrary reader (unit-testable stdin seam). Returns
-/// the (lossy-decoded, capped) text and the **uncapped** byte total.
-fn read_stdin_from<R: Read>(reader: &mut R, cap: usize) -> (String, usize) {
-    let mut raw = Vec::new();
-    if reader.read_to_end(&mut raw).is_err() {
-        return (String::new(), 0);
-    }
-    let total = raw.len();
-    raw.truncate(cap);
-    (String::from_utf8_lossy(&raw).to_string(), total)
-}
-
 /// sha256 hex of the tool file (the cache marker).
 fn tool_sha256(tool: &loader::ToolDef) -> String {
     use sha2::{Digest, Sha256};
@@ -300,29 +277,4 @@ fn write_transcript_marker(tool: &loader::ToolDef) {
     let dir = cache_dir().join("virtual-tools").join(&tool.name);
     let _ = std::fs::create_dir_all(&dir);
     let _ = std::fs::write(dir.join("tool.sha256"), &sha);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn tty_stdin_is_never_read() {
-        assert_eq!(read_stdin(10, true), (None, None));
-    }
-
-    #[test]
-    fn pipe_stdin_read_and_truncated_at_cap() {
-        let data = "x".repeat(100);
-        let (text, total) = read_stdin_from(&mut data.as_bytes(), 16);
-        assert_eq!(text, "x".repeat(16));
-        assert_eq!(total, 100);
-    }
-
-    #[test]
-    fn pipe_stdin_under_cap_read_fully() {
-        let (text, total) = read_stdin_from(&mut "hello".as_bytes(), 16);
-        assert_eq!(text, "hello");
-        assert_eq!(total, 5);
-    }
 }

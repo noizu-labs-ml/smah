@@ -268,10 +268,16 @@ fn unknown_builtin_is_exit_3_at_resolve() {
 
 #[test]
 fn back_compat_table_unaffected() {
-    // The pre-existing surface still parses: bare smah (exit 2 notice) and
-    // tools list — wrappers did not displace the command tree.
+    // The pre-existing surface still parses: bare smah and tools list —
+    // wrappers did not displace the command tree. Bare smah's contract
+    // changed at the RA sync (rust-ask owns the bare path now: help exit 0
+    // on a non-TTY; a TTY without config gets the config-init offer) — the
+    // old develop-era exit-2 M5 notice is gone.
     let sb = Sandbox::new();
-    sb.smah().assert().code(2);
+    sb.smah()
+        .assert()
+        .code(0)
+        .stdout(predicates::str::contains("Usage: smah"));
     sb.smah()
         .args(["tools", "list"])
         .assert()

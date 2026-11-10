@@ -181,10 +181,16 @@ self-tests both directions). Contract:
   only**: per-step decision (`started`/`finished`/`skipped`/`aborted`),
   status, duration, bytes, redacted argv, and params.
 - **audit redaction (M1)**: EVERY param value is recorded as its name plus
-  a `sha256:` prefix (12 hex) — not just secret-ish names — and the argv
-  is rewritten the same way. The only way a value lands verbatim is the
-  per-param `audit: plain` opt-in in the wrapper file, and even that still
-  passes the registered-secret redactor.
+  a keyed `hmac:` prefix (16 hex of an HMAC-SHA256 under a per-install
+  32-byte key at `~/.smah/audit.key`, mode 0600, created atomically on
+  first use) — not just secret-ish names — and the argv is rewritten the
+  same way. Tokens still correlate within one install (same value ⇒ same
+  token), but an unkeyed-prefix brute force against low-entropy values
+  (PINs, short tokens) is impossible without the key file. If the key
+  cannot be created or read, execution is refused (fail-closed, exit 1),
+  exactly like an audit-write failure. The only way a value lands
+  verbatim is the per-param `audit: plain` opt-in in the wrapper file,
+  and even that still passes the registered-secret redactor.
 - **transcript hygiene (H2/M2)**: `.cast` parsing strips OSC/DCS/APC/PM/SOS
   string sequences (through ST or BEL), CSI, and all C0/C1 control bytes —
   transcript text can contain only printable characters plus `\n`/`\t`,
@@ -193,8 +199,8 @@ self-tests both directions). Contract:
   error instead of a silent truncate.
 
 Exit codes: 0 success · 1 step failure, timeout, user abort, or
-audit-write failure · 2 usage · 3 invalid wrapper · 4 **approval
-integrity** (missing/malformed/mismatched stamp).
+audit-write / audit-key failure · 2 usage · 3 invalid wrapper · 4
+**approval integrity** (missing/malformed/mismatched stamp).
 
 ## Phase 2 (not in this epic's code)
 
